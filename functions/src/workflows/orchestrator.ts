@@ -22,7 +22,8 @@ import * as admin from 'firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
 import Anthropic from '@anthropic-ai/sdk';
 
-const db = admin.firestore();
+// Lazy initialization to avoid calling firestore() before initializeApp()
+const getDb = () => admin.firestore();
 
 // ============================================
 // Types
@@ -245,14 +246,14 @@ export class WorkflowOrchestrator {
    * Save workflow state to Firestore
    */
   private async saveState(state: WorkflowState): Promise<void> {
-    await db.doc(`workflows/${state.workflowId}`).set(state);
+    await getDb().doc(`workflows/${state.workflowId}`).set(state);
   }
 
   /**
    * Load workflow state from Firestore
    */
   private async loadState(workflowId: string): Promise<WorkflowState | null> {
-    const doc = await db.doc(`workflows/${workflowId}`).get();
+    const doc = await getDb().doc(`workflows/${workflowId}`).get();
     return doc.exists ? (doc.data() as WorkflowState) : null;
   }
 
@@ -263,7 +264,7 @@ export class WorkflowOrchestrator {
     workflowId: string,
     updates: Partial<WorkflowState>
   ): Promise<void> {
-    await db.doc(`workflows/${workflowId}`).update({
+    await getDb().doc(`workflows/${workflowId}`).update({
       ...updates,
       updatedAt: new Date(),
     });
@@ -281,7 +282,7 @@ export class WorkflowOrchestrator {
     }
   ): Promise<void> {
     // Create HITL request
-    await db.collection('hitlRequests').add({
+    await getDb().collection('hitlRequests').add({
       tenantId: state.tenantId,
       workflowId: state.workflowId,
       requestType: 'approval',

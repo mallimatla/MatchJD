@@ -20,7 +20,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import * as admin from 'firebase-admin';
 
-const db = admin.firestore();
+// Lazy initialization to avoid calling firestore() before initializeApp()
+const getDb = () => admin.firestore();
 
 // ============================================
 // Types
@@ -258,7 +259,7 @@ Respond with JSON:
       },
       execute: async (params) => {
         // In production, query actual parcel database
-        const snapshot = await db
+        const snapshot = await getDb()
           .collection('parcels')
           .where('county', '==', params.county)
           .where('state', '==', params.state)
@@ -280,7 +281,7 @@ Respond with JSON:
         parcelId: { type: 'string', description: 'Parcel ID or APN' },
       },
       execute: async (params) => {
-        const doc = await db.doc(`parcels/${params.parcelId}`).get();
+        const doc = await getDb().doc(`parcels/${params.parcelId}`).get();
         return doc.exists ? { id: doc.id, ...doc.data() } : null;
       },
     };
@@ -364,7 +365,7 @@ Respond with JSON:
         documentId: { type: 'string', description: 'Document ID' },
       },
       execute: async (params) => {
-        const doc = await db.doc(`documents/${params.documentId}`).get();
+        const doc = await getDb().doc(`documents/${params.documentId}`).get();
         if (!doc.exists) return null;
 
         const data = doc.data();
