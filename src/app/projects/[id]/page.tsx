@@ -29,7 +29,7 @@ import { DueDiligenceDashboard } from '@/components/DueDiligenceDashboard';
 import { FinancialSummary } from '@/components/FinancialSummary';
 import { ProjectLifecycle } from '@/components/ProjectLifecycle';
 import { cn, formatDate, getStatusColor, formatCurrency } from '@/lib/utils';
-import type { Project, Document } from '@/types';
+import type { Project, Document, Parcel } from '@/types';
 
 type TabType = 'overview' | 'documents' | 'parcels' | 'workflows' | 'analysis' | 'dd' | 'financials' | 'upload';
 
@@ -348,7 +348,7 @@ export default function ProjectDetailPage() {
         {activeTab === 'analysis' && (
           <SiteAnalysis
             projectId={projectId}
-            parcels={parcels}
+            parcels={parcels as Parcel[]}
             projectRequirements={{
               requiredCapacityMw: project.capacityMwAc,
             }}
