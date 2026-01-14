@@ -1,0 +1,165 @@
+{
+  "searchCriteria": {
+    "county": "Travis",
+    "state": "TX",
+    "minAcres": 100,
+    "maxAcres": 1000
+  },
+  "parcels": [
+    {
+      "id": "parcel-001",
+      "apn": "APN-123-456-789",
+      "county": "Travis",
+      "state": "TX",
+      "totalAcres": 500,
+      "owner": {
+        "name": "John Smith",
+        "type": "individual",
+        "address": "123 Farm Road, Austin, TX 78701"
+      },
+      "zoning": {
+        "code": "A-1",
+        "description": "Agricultural",
+        "permitsSolar": true,
+        "requiresCUP": true,
+        "setbacks": {
+          "front": 50,
+          "side": 25,
+          "rear": 25
+        }
+      },
+      "environmental": {
+        "wetlands": { "present": true, "acres": 0.8 },
+        "floodZone": { "zone": "X", "inFloodway": false },
+        "endangeredSpecies": { "present": false },
+        "primeAg": { "isPrimeFarmland": false }
+      },
+      "utilities": {
+        "nearestSubstation": {
+          "name": "North Austin 345kV",
+          "distanceMiles": 2.5,
+          "availableCapacityMW": 150
+        },
+        "transmissionLines": [
+          { "voltage": "138kV", "distanceMiles": 0.3 },
+          { "voltage": "345kV", "distanceMiles": 2.5 }
+        ]
+      },
+      "solarPotential": {
+        "averageGHI": 5.2,
+        "estimatedCapacityMW": 85,
+        "estimatedAnnualMWh": 170000
+      },
+      "score": 92
+    },
+    {
+      "id": "parcel-002",
+      "apn": "APN-234-567-890",
+      "county": "Travis",
+      "state": "TX",
+      "totalAcres": 320,
+      "owner": {
+        "name": "Smith Family Trust",
+        "type": "trust",
+        "address": "456 Ranch Road, Austin, TX 78702"
+      },
+      "zoning": {
+        "code": "A-2",
+        "description": "Agricultural-Residential",
+        "permitsSolar": true,
+        "requiresCUP": false,
+        "setbacks": {
+          "front": 75,
+          "side": 50,
+          "rear": 50
+        }
+      },
+      "environmental": {
+        "wetlands": { "present": false, "acres": 0 },
+        "floodZone": { "zone": "X", "inFloodway": false },
+        "endangeredSpecies": { "present": false },
+        "primeAg": { "isPrimeFarmland": true }
+      },
+      "utilities": {
+        "nearestSubstation": {
+          "name": "East Travis 138kV",
+          "distanceMiles": 1.2,
+          "availableCapacityMW": 50
+        },
+        "transmissionLines": [
+          { "voltage": "138kV", "distanceMiles": 0.1 }
+        ]
+      },
+      "solarPotential": {
+        "averageGHI": 5.3,
+        "estimatedCapacityMW": 54,
+        "estimatedAnnualMWh": 108000
+      },
+      "score": 85
+    },
+    {
+      "id": "parcel-003",
+      "apn": "APN-345-678-901",
+      "county": "Travis",
+      "state": "TX",
+      "totalAcres": 750,
+      "owner": {
+        "name": "Lone Star Ranch LLC",
+        "type": "llc",
+        "address": "789 Country Lane, Austin, TX 78703"
+      },
+      "zoning": {
+        "code": "A-1",
+        "description": "Agricultural",
+        "permitsSolar": true,
+        "requiresCUP": true,
+        "setbacks": {
+          "front": 50,
+          "side": 25,
+          "rear": 25
+        }
+      },
+      "environmental": {
+        "wetlands": { "present": true, "acres": 15 },
+        "floodZone": { "zone": "AE", "inFloodway": true },
+        "endangeredSpecies": { "present": true, "species": ["Golden-cheeked Warbler"] },
+        "primeAg": { "isPrimeFarmland": false }
+      },
+      "utilities": {
+        "nearestSubstation": {
+          "name": "West Travis 345kV",
+          "distanceMiles": 5.0,
+          "availableCapacityMW": 200
+        },
+        "transmissionLines": [
+          { "voltage": "69kV", "distanceMiles": 1.0 },
+          { "voltage": "345kV", "distanceMiles": 5.0 }
+        ]
+      },
+      "solarPotential": {
+        "averageGHI": 5.1,
+        "estimatedCapacityMW": 100,
+        "estimatedAnnualMWh": 200000
+      },
+      "score": 65
+    }
+  ],
+  "marketRates": {
+    "county": "Travis",
+    "state": "TX",
+    "solarLeaseRates": {
+      "low": 300,
+      "median": 500,
+      "high": 800,
+      "unit": "$/acre/year"
+    },
+    "landValues": {
+      "agricultural": {
+        "low": 3000,
+        "median": 5000,
+        "high": 8000,
+        "unit": "$/acre"
+      }
+    }
+  }
+}

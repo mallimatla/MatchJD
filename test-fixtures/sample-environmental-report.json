@@ -1,0 +1,46 @@
+{
+  "documentText": "PHASE I ENVIRONMENTAL SITE ASSESSMENT\n\nProject: Travis County Solar Development\nProperty Address: 1234 Rural Route 45, Austin, TX 78701\nAssessment Date: December 15, 2023\nPrepared By: EnviroConsult LLC\n\nEXECUTIVE SUMMARY:\n\nThis Phase I Environmental Site Assessment (ESA) was conducted in accordance with ASTM E1527-21 standards for the property located in Travis County, Texas. The assessment included a site reconnaissance, historical review, regulatory database search, and interviews with current and past property owners.\n\nSITE DESCRIPTION:\n\nProperty Size: 500 acres\nCurrent Use: Agricultural (cattle grazing, hay production)\nTopography: Generally flat with gentle slopes (<5%)\nSoil Type: Houston Black Clay\nVegetation: Native grassland with scattered oak trees\n\nFINDINGS:\n\n1. RECOGNIZED ENVIRONMENTAL CONDITIONS (RECs):\n   - None identified\n\n2. CONTROLLED RECs:\n   - None identified\n\n3. HISTORICAL RECs:\n   - Former agricultural chemical storage shed (removed 2005)\n   - No evidence of contamination at former location\n\n4. DE MINIMIS CONDITIONS:\n   - Small quantity of used motor oil stored in barn\n   - Properly contained, recommended proper disposal\n\nWETLANDS ASSESSMENT:\n\nNWI Map Review: No mapped wetlands on property\nField Verification: Two small seasonal drainage areas identified\n  - Area 1: 0.5 acres in northeast corner\n  - Area 2: 0.3 acres along southern boundary\nJurisdictional Status: Likely non-jurisdictional (isolated features)\nRecommendation: Formal wetland delineation if development planned in these areas\n\nTHREATENED & ENDANGERED SPECIES:\n\nIPaC Review Completed: December 10, 2023\nSpecies of Concern:\n  - Golden-cheeked Warbler: No suitable habitat on site\n  - Black-capped Vireo: No suitable habitat on site\nConclusion: No T&E species impacts anticipated\n\nCULTURAL RESOURCES:\n\nTexas Historical Commission Review: No recorded sites on property\nDesktop Review: No evidence of historical structures\nRecommendation: Cultural survey if ground disturbance >1 acre\n\nFLOOD ZONE:\n\nFEMA Panel: 48453C0305G\nFlood Zone: Zone X (minimal flood hazard)\nFloodway: Not within floodway\n100-Year Floodplain: Property not within 100-year floodplain\n\nCONCLUSIONS AND RECOMMENDATIONS:\n\n1. No RECs identified that would preclude solar development\n2. Avoid the 0.8 acres of potential wetland areas or obtain permits\n3. Conduct cultural resource survey prior to construction\n4. Properly dispose of used motor oil in barn\n5. Property is suitable for solar development from environmental perspective\n\nLIMITATIONS:\n\nThis assessment is limited to the scope of ASTM E1527-21 and does not include:\n- Asbestos survey\n- Lead-based paint assessment\n- Radon testing\n- Mold assessment\n\nCERTIFICATION:\n\nI certify that this Phase I ESA was conducted in accordance with ASTM E1527-21.\n\n_______________________\nSarah Williams, PE\nEnvironmental Professional\nEnviroConsult LLC\nLicense #: TX-12345",
+  "expectedClassification": {
+    "category": "environmental",
+    "confidence": 0.94,
+    "reasoning": "Document is a Phase I Environmental Site Assessment with site conditions, wetlands assessment, and environmental findings"
+  },
+  "expectedExtraction": {
+    "reportType": "Phase I ESA",
+    "standard": "ASTM E1527-21",
+    "assessmentDate": "2023-12-15",
+    "preparedBy": "EnviroConsult LLC",
+    "propertySize": 500,
+    "currentUse": "Agricultural",
+    "recognizedEnvironmentalConditions": [],
+    "controlledRECs": [],
+    "historicalRECs": ["Former agricultural chemical storage shed"],
+    "deMinimisConditions": ["Small quantity used motor oil"],
+    "wetlands": {
+      "present": true,
+      "totalAcres": 0.8,
+      "jurisdictional": false,
+      "areas": [
+        { "location": "northeast corner", "acres": 0.5 },
+        { "location": "southern boundary", "acres": 0.3 }
+      ]
+    },
+    "endangeredSpecies": {
+      "present": false,
+      "speciesReviewed": ["Golden-cheeked Warbler", "Black-capped Vireo"]
+    },
+    "floodZone": {
+      "zone": "X",
+      "inFloodway": false,
+      "in100YearFloodplain": false
+    },
+    "recommendations": [
+      "Avoid wetland areas or obtain permits",
+      "Conduct cultural resource survey",
+      "Dispose of used motor oil"
+    ],
+    "suitableForDevelopment": true
+  },
+  "hitlRequired": false,
+  "hitlReasons": []
+}

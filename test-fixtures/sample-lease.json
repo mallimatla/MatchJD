@@ -1,0 +1,55 @@
+{
+  "documentText": "SOLAR LAND LEASE AGREEMENT\n\nThis Solar Land Lease Agreement ('Agreement') is made and entered into as of January 15, 2024 ('Effective Date').\n\nPARTIES:\n\nLessor: John Smith, an individual residing at 123 Farm Road, Austin, Texas 78701 ('Landowner')\n\nLessee: SolarDev LLC, a Texas limited liability company with principal offices at 456 Energy Drive, Houston, Texas 77001 ('Developer')\n\nPROPERTY DESCRIPTION:\n\nThe Leased Premises consists of approximately 500 acres of land located in Travis County, Texas, more particularly described as:\nParcel Number: APN-123-456-789\nLegal Description: Lot 45, Block 12, Travis County Agricultural District\n\nTERM:\n\nInitial Term: Twenty-five (25) years commencing on March 1, 2024 ('Commencement Date') and ending on February 28, 2049.\n\nExtension Options: Lessee shall have two (2) successive options to extend the term for five (5) years each, upon written notice to Lessor no less than 180 days prior to expiration.\n\nRENT:\n\nBase Rent: $500 per acre per year, payable annually in advance.\nAnnual Escalation: Rent shall increase by 2% per year.\nSigning Bonus: A one-time signing bonus of $50,000, payable upon execution.\n\nPURCHASE OPTION:\n\nLessee shall have the option to purchase the Leased Premises at fair market value, exercisable upon 90 days written notice.\n\nPERMITTED USES:\n\n- Solar photovoltaic energy generation\n- Battery energy storage systems\n- Electrical transmission equipment\n- Access roads and maintenance facilities\n\nTERMINATION:\n\nEither party may terminate this Agreement upon 180 days written notice for material breach that remains uncured for 60 days.\n\nGOVERNING LAW:\n\nThis Agreement shall be governed by the laws of the State of Texas.\n\nSIGNATURES:\n\n_______________________\nJohn Smith, Landowner\nDate: January 15, 2024\n\n_______________________\nSolarDev LLC\nBy: Jane Doe, Managing Member\nDate: January 15, 2024",
+  "expectedClassification": {
+    "category": "lease",
+    "confidence": 0.95,
+    "reasoning": "Document contains clear lease agreement language with lessor/lessee parties, property description, rent terms, and duration"
+  },
+  "expectedExtraction": {
+    "documentDate": "2024-01-15",
+    "effectiveDate": "2024-01-15",
+    "lessor": {
+      "name": "John Smith",
+      "entityType": "individual",
+      "address": "123 Farm Road, Austin, Texas 78701"
+    },
+    "lessee": {
+      "name": "SolarDev LLC",
+      "entityType": "llc",
+      "address": "456 Energy Drive, Houston, Texas 77001"
+    },
+    "propertyDescription": "Lot 45, Block 12, Travis County Agricultural District",
+    "county": "Travis",
+    "state": "TX",
+    "parcelNumbers": ["APN-123-456-789"],
+    "totalAcres": 500,
+    "initialTermYears": 25,
+    "commencementDate": "2024-03-01",
+    "expirationDate": "2049-02-28",
+    "rent": {
+      "baseRentPerAcre": 500,
+      "annualEscalationPercent": 2,
+      "signingBonus": 50000
+    },
+    "extensionOptions": [
+      { "termYears": 5, "noticeDays": 180 },
+      { "termYears": 5, "noticeDays": 180 }
+    ],
+    "purchaseOption": {
+      "exists": true,
+      "priceFormula": "fair market value"
+    },
+    "permittedUses": [
+      "Solar photovoltaic energy generation",
+      "Battery energy storage systems",
+      "Electrical transmission equipment",
+      "Access roads and maintenance facilities"
+    ],
+    "terminationProvisions": ["180 days written notice for material breach"]
+  },
+  "hitlRequired": true,
+  "hitlReasons": [
+    "Legal document requires attorney review",
+    "Financial commitment > $10,000 requires approval"
+  ]
+}

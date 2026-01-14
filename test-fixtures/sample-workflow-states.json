@@ -1,0 +1,164 @@
+{
+  "documentProcessingWorkflow": {
+    "workflowType": "document_processing",
+    "nodes": ["start", "classify", "extract", "validate", "hitl_gate", "complete"],
+    "edges": [
+      { "from": "start", "to": "classify" },
+      { "from": "classify", "to": "extract" },
+      { "from": "extract", "to": "validate" },
+      { "from": "validate", "to": "hitl_gate" },
+      { "from": "hitl_gate", "to": "complete" }
+    ],
+    "testStates": [
+      {
+        "name": "Initial State",
+        "state": {
+          "workflowId": "wf-test-001",
+          "tenantId": "tenant-test-001",
+          "status": "pending",
+          "currentNode": "start",
+          "data": {
+            "documentId": "doc-test-001",
+            "storageUrl": "gs://bucket/documents/test-lease.pdf"
+          },
+          "history": []
+        }
+      },
+      {
+        "name": "After Classification",
+        "state": {
+          "workflowId": "wf-test-001",
+          "tenantId": "tenant-test-001",
+          "status": "running",
+          "currentNode": "extract",
+          "data": {
+            "documentId": "doc-test-001",
+            "storageUrl": "gs://bucket/documents/test-lease.pdf",
+            "classification": {
+              "category": "lease",
+              "confidence": 0.95,
+              "reasoning": "Document contains lease agreement language"
+            }
+          },
+          "history": [
+            {
+              "node": "classify",
+              "timestamp": "2024-01-15T10:00:00Z",
+              "data": { "category": "lease", "confidence": 0.95 }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Paused at HITL Gate",
+        "state": {
+          "workflowId": "wf-test-001",
+          "tenantId": "tenant-test-001",
+          "status": "paused",
+          "currentNode": "hitl_gate",
+          "data": {
+            "documentId": "doc-test-001",
+            "classification": { "category": "lease", "confidence": 0.95 },
+            "extraction": {
+              "lessor": { "name": "John Smith" },
+              "totalAcres": 500,
+              "rent": { "baseRentPerAcre": 500 }
+            },
+            "validation": { "passed": true, "confidence": 0.92 },
+            "requiresHITL": true,
+            "hitlReasons": [
+              "Legal document requires attorney review",
+              "Financial commitment > $10,000"
+            ]
+          },
+          "history": [
+            { "node": "classify", "timestamp": "2024-01-15T10:00:00Z" },
+            { "node": "extract", "timestamp": "2024-01-15T10:00:05Z" },
+            { "node": "validate", "timestamp": "2024-01-15T10:00:10Z" }
+          ]
+        }
+      },
+      {
+        "name": "Completed After HITL Approval",
+        "state": {
+          "workflowId": "wf-test-001",
+          "tenantId": "tenant-test-001",
+          "status": "completed",
+          "currentNode": "complete",
+          "data": {
+            "documentId": "doc-test-001",
+            "classification": { "category": "lease", "confidence": 0.95 },
+            "extraction": {
+              "lessor": { "name": "John Smith" },
+              "totalAcres": 500,
+              "rent": { "baseRentPerAcre": 500 }
+            },
+            "hitlResponse": {
+              "approved": true,
+              "reviewer": "attorney@company.com",
+              "notes": "Terms acceptable, proceed with execution",
+              "timestamp": "2024-01-15T14:30:00Z"
+            }
+          },
+          "history": [
+            { "node": "classify", "timestamp": "2024-01-15T10:00:00Z" },
+            { "node": "extract", "timestamp": "2024-01-15T10:00:05Z" },
+            { "node": "validate", "timestamp": "2024-01-15T10:00:10Z" },
+            { "node": "hitl_gate", "timestamp": "2024-01-15T14:30:00Z" },
+            { "node": "complete", "timestamp": "2024-01-15T14:30:01Z" }
+          ]
+        }
+      }
+    ]
+  },
+  "landAcquisitionWorkflow": {
+    "workflowType": "land_acquisition",
+    "phases": ["site_analysis", "due_diligence", "lease_negotiation", "legal_review", "execute_lease"],
+    "testStates": [
+      {
+        "name": "Site Analysis Complete",
+        "state": {
+          "workflowId": "wf-land-001",
+          "tenantId": "tenant-test-001",
+          "status": "running",
+          "currentPhase": "due_diligence",
+          "data": {
+            "projectId": "proj-test-001",
+            "parcelId": "parcel-001",
+            "siteAnalysis": {
+              "solarPotential": 85,
+              "zoningCompatible": true,
+              "interconnectionFeasible": true,
+              "score": 92
+            }
+          }
+        }
+      },
+      {
+        "name": "Paused at Legal Review",
+        "state": {
+          "workflowId": "wf-land-001",
+          "tenantId": "tenant-test-001",
+          "status": "paused",
+          "currentPhase": "legal_review",
+          "data": {
+            "projectId": "proj-test-001",
+            "parcelId": "parcel-001",
+            "dueDiligence": {
+              "title": { "status": "complete", "issues": 0 },
+              "environmental": { "status": "complete", "issues": 0 },
+              "survey": { "status": "complete", "issues": 0 },
+              "zoning": { "status": "complete", "issues": 1 }
+            },
+            "leaseTerms": {
+              "rentPerAcre": 500,
+              "termYears": 25,
+              "signingBonus": 50000
+            },
+            "requiresLegalReview": true
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "documentText": "POWER PURCHASE AGREEMENT\n\nThis Power Purchase Agreement ('PPA') is entered into as of February 1, 2024.\n\nPARTIES:\n\nSeller: SolarDev LLC ('Producer')\nAddress: 456 Energy Drive, Houston, Texas 77001\n\nBuyer: Austin Energy ('Offtaker')\nAddress: 721 Barton Springs Road, Austin, Texas 78704\n\nPROJECT DETAILS:\n\nFacility Name: Travis County Solar Farm\nFacility Location: Travis County, Texas\nNameplate Capacity: 100 MW DC / 80 MW AC\nCommercial Operation Date: January 1, 2026 (Projected)\n\nTERM:\n\nDelivery Term: Twenty (20) years from Commercial Operation Date\n\nPRICING:\n\nContract Price: $0.035 per kWh\nAnnual Escalation: 1.5% per year\nTime-of-Delivery Multipliers:\n  - Peak Hours (2PM-7PM): 1.25x\n  - Off-Peak Hours: 1.0x\n\nENERGY DELIVERY:\n\nExpected Annual Generation: 200,000 MWh\nMinimum Annual Delivery: 180,000 MWh (90% of expected)\nExcess Generation: Purchased at 80% of Contract Price\n\nPOINT OF DELIVERY:\n\nERCOT Node: HB_NORTH\nInterconnection: 345kV transmission line\n\nCURTAILMENT:\n\nBuyer Curtailment: Buyer pays 100% of Contract Price for curtailed energy\nGrid Curtailment: Force Majeure, no compensation\n\nPERFORMANCE GUARANTEES:\n\nCapacity Factor: Minimum 22% annual average\nAvailability: Minimum 97%\n\nDAMAGES:\n\nDelay Damages: $50,000 per day after guaranteed COD (max 90 days)\nPerformance Shortfall: Pro-rata reduction in capacity payments\n\nTERMINATION:\n\nBuyer may terminate for extended Force Majeure (>180 days)\nSeller may terminate for non-payment (>90 days overdue)\n\nGOVERNING LAW:\n\nState of Texas, ERCOT protocols applicable\n\nSIGNATURES:\n\n_______________________\nSolarDev LLC\nBy: Jane Doe, Managing Member\n\n_______________________\nAustin Energy\nBy: Robert Johnson, Director of Power Supply",
+  "expectedClassification": {
+    "category": "ppa",
+    "confidence": 0.97,
+    "reasoning": "Document is clearly a Power Purchase Agreement with buyer/seller parties, energy pricing, delivery terms, and performance guarantees"
+  },
+  "expectedExtraction": {
+    "documentDate": "2024-02-01",
+    "seller": {
+      "name": "SolarDev LLC",
+      "role": "Producer"
+    },
+    "buyer": {
+      "name": "Austin Energy",
+      "role": "Offtaker"
+    },
+    "projectName": "Travis County Solar Farm",
+    "projectLocation": "Travis County, Texas",
+    "capacity": {
+      "dcMW": 100,
+      "acMW": 80
+    },
+    "commercialOperationDate": "2026-01-01",
+    "termYears": 20,
+    "pricing": {
+      "basePrice": 0.035,
+      "unit": "kWh",
+      "escalationPercent": 1.5,
+      "todMultipliers": {
+        "peak": 1.25,
+        "offPeak": 1.0
+      }
+    },
+    "expectedGeneration": {
+      "annualMWh": 200000,
+      "minimumMWh": 180000
+    },
+    "deliveryPoint": {
+      "node": "HB_NORTH",
+      "interconnection": "345kV transmission line"
+    },
+    "performanceGuarantees": {
+      "capacityFactor": 0.22,
+      "availability": 0.97
+    },
+    "damages": {
+      "delayPerDay": 50000,
+      "maxDelayDays": 90
+    }
+  },
+  "hitlRequired": true,
+  "hitlReasons": [
+    "Legal document requires attorney review",
+    "Multi-year financial commitment requires approval"
+  ]
+}
