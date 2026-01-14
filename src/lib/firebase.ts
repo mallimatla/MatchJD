@@ -4,14 +4,14 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
 
-// Firebase configuration from environment variables
+// Firebase configuration (hardcoded - these are public client keys, safe to expose)
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyAhYCWMCI1v-jLMu46bVLgS8OUwKavzDeo",
+  authDomain: "skillquest-f0a12.firebaseapp.com",
+  projectId: "skillquest-f0a12",
+  storageBucket: "skillquest-f0a12.firebasestorage.app",
+  messagingSenderId: "134564755489",
+  appId: "1:134564755489:web:b29158bda40709e117cb60",
 };
 
 // Initialize Firebase (singleton pattern)
