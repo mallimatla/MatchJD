@@ -1,0 +1,105 @@
+SOLAR ACCESS AND TRANSMISSION EASEMENT AGREEMENT
+
+This EASEMENT AGREEMENT ("Agreement") is made as of March 1, 2026
+
+GRANTOR: James Wilson
+Address: 5678 County Road 100, Springfield, IL 62702
+("Grantor")
+
+GRANTEE: Springfield Solar Transmission LLC
+Address: 100 Renewable Drive, Springfield, IL 62701
+("Grantee")
+
+RECITALS
+
+WHEREAS, Grantor is the owner of certain real property located in Sangamon County, Illinois; and
+
+WHEREAS, Grantee requires an easement across Grantor's property for the purpose of constructing and maintaining electrical transmission facilities.
+
+NOW, THEREFORE, for good and valuable consideration, the receipt of which is hereby acknowledged:
+
+ARTICLE 1 - GRANT OF EASEMENT
+
+1.1 Easement Grant: Grantor hereby grants to Grantee a perpetual, non-exclusive easement for the following purposes:
+    (a) Construction, installation, operation, maintenance, repair, and replacement of electrical transmission lines
+    (b) Construction of access roads
+    (c) Vegetation management within the easement corridor
+
+1.2 Easement Corridor: The easement shall be fifty (50) feet in width, located as shown on Exhibit A attached hereto.
+
+1.3 Location: The easement crosses the following described property:
+    Parcel Number: APN 123-456-800
+    Legal Description: The Southeast Quarter of Section 11, Township 15 North, Range 5 West
+    Easement Length: Approximately 2,500 linear feet
+
+ARTICLE 2 - PURPOSE
+
+2.1 Permitted Uses: Grantee may use the easement for:
+    (a) Installation of wooden or steel transmission poles up to 80 feet in height
+    (b) Installation of overhead conductors rated up to 138 kV
+    (c) Installation of guy wires and anchors
+    (d) Gravel access road 16 feet in width
+    (e) Underground fiber optic communication lines
+
+ARTICLE 3 - COMPENSATION
+
+3.1 Initial Payment: Grantee shall pay Grantor Twenty-Five Thousand Dollars ($25,000.00) upon execution of this Agreement.
+
+3.2 Annual Payment: Grantee shall pay Grantor Five Hundred Dollars ($500.00) per year for maintenance access rights.
+
+3.3 Crop Damage: Grantee shall compensate Grantor for any crop damage at current market rates.
+
+ARTICLE 4 - RIGHTS AND OBLIGATIONS
+
+4.1 Grantor's Rights: Grantor retains the right to use the easement area for agricultural purposes, provided such use does not interfere with Grantee's facilities.
+
+4.2 Grantee's Obligations:
+    (a) Maintain facilities in good condition
+    (b) Restore property to original condition after construction
+    (c) Provide 48 hours notice before accessing property except in emergencies
+    (d) Maintain liability insurance of $2,000,000
+
+4.3 Vegetation Management: Grantee may remove or trim any vegetation within the easement corridor that may interfere with the transmission facilities.
+
+ARTICLE 5 - TERM AND TERMINATION
+
+5.1 Term: This easement shall be perpetual and shall run with the land.
+
+5.2 Abandonment: If Grantee abandons the easement for a period of five (5) consecutive years, this easement shall terminate automatically.
+
+5.3 Removal: Upon termination, Grantee shall remove all facilities and restore the property within twelve (12) months.
+
+ARTICLE 6 - MISCELLANEOUS
+
+6.1 Recording: This Agreement shall be recorded in the Sangamon County Recorder's Office.
+
+6.2 Successors: This Agreement shall be binding upon and inure to the benefit of the parties and their successors and assigns.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement.
+
+GRANTOR:
+
+_________________________
+James Wilson
+Date: March 1, 2026
+
+GRANTEE:
+Springfield Solar Transmission LLC
+
+By: _________________________
+Name: David Park
+Title: Vice President, Land Acquisition
+Date: March 1, 2026
+
+
+STATE OF ILLINOIS    )
+                     ) SS
+COUNTY OF SANGAMON   )
+
+Before me, a Notary Public, personally appeared James Wilson, known to me to be the person whose name is subscribed to the foregoing instrument, and acknowledged that he executed the same for the purposes therein contained.
+
+IN WITNESS WHEREOF, I have hereunto set my hand and official seal this ___ day of March, 2026.
+
+_________________________
+Notary Public
+My Commission Expires: ___________
