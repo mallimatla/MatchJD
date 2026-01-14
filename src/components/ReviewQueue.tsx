@@ -416,8 +416,8 @@ export function ReviewQueue() {
   });
 
   // Get unique categories and urgencies for filters
-  const categories = [...new Set(requests.map((r: any) => r.context?.category || 'unknown'))];
-  const urgencies = [...new Set(requests.map((r: any) => r.urgency || 'medium'))];
+  const categories = Array.from(new Set(requests.map((r: any) => r.context?.category || 'unknown')));
+  const urgencies = Array.from(new Set(requests.map((r: any) => r.urgency || 'medium')));
 
   const toggleSelection = (id: string) => {
     const newSelected = new Set(selectedIds);
@@ -441,7 +441,9 @@ export function ReviewQueue() {
     if (selectedIds.size === 0) return;
     setBulkProcessing(true);
 
-    for (const requestId of selectedIds) {
+    const ids = Array.from(selectedIds);
+    for (let i = 0; i < ids.length; i++) {
+      const requestId = ids[i];
       try {
         await updateDoc(doc(firebaseDb, 'hitlRequests', requestId), {
           status: 'approved',
@@ -464,7 +466,9 @@ export function ReviewQueue() {
 
     setBulkProcessing(true);
 
-    for (const requestId of selectedIds) {
+    const ids = Array.from(selectedIds);
+    for (let i = 0; i < ids.length; i++) {
+      const requestId = ids[i];
       try {
         await updateDoc(doc(firebaseDb, 'hitlRequests', requestId), {
           status: 'rejected',
