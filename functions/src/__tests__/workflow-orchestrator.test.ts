@@ -167,30 +167,30 @@ describe('Workflow Orchestrator Logic', () => {
 
   describe('Workflow Completion', () => {
     it('should mark workflow as completed after final node', () => {
-      const state = {
-        status: 'running' as const,
+      const state: { status: string; currentNode: string } = {
+        status: 'running',
         currentNode: 'complete',
       };
 
       // Final node logic
       if (state.currentNode === 'complete') {
-        state.status = 'completed' as const;
+        state.status = 'completed';
       }
 
       expect(state.status).toBe('completed');
     });
 
     it('should mark workflow as failed on error', () => {
-      const state = {
-        status: 'running' as const,
-        error: null as string | null,
+      const state: { status: string; error: string | null } = {
+        status: 'running',
+        error: null,
       };
 
       // Error handling
       try {
         throw new Error('Processing failed');
       } catch (err) {
-        state.status = 'failed' as const;
+        state.status = 'failed';
         state.error = (err as Error).message;
       }
 
@@ -227,7 +227,7 @@ describe('Workflow Orchestrator Logic', () => {
   });
 
   describe('Land Acquisition Workflow', () => {
-    const phases = ['site_analysis', 'due_diligence', 'lease_negotiation', 'legal_review', 'execute_lease'];
+    // Phases: site_analysis -> due_diligence -> lease_negotiation -> legal_review -> execute_lease
 
     it('should require legal review for all leases', () => {
       const currentPhase = 'legal_review';
