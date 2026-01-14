@@ -16,7 +16,10 @@ import {
   DollarSign,
   Building,
   FileCheck,
-  Zap
+  Zap,
+  Filter,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firebaseDb } from '@/lib/firebase';
@@ -396,6 +399,87 @@ export function ReviewQueue() {
   const { data: requests, loading, error } = useReviewQueue();
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  // Filter requests
+  const filteredRequests = requests.filter((req: any) => {
+    const category = req.context?.category || 'unknown';
+    const urgency = req.urgency || 'medium';
+
+    if (categoryFilter !== 'all' && category !== categoryFilter) return false;
+    if (urgencyFilter !== 'all' && urgency !== urgencyFilter) return false;
+
+    return true;
+  });
+
+  // Get unique categories and urgencies for filters
+  const categories = [...new Set(requests.map((r: any) => r.context?.category || 'unknown'))];
+  const urgencies = [...new Set(requests.map((r: any) => r.urgency || 'medium'))];
+
+  const toggleSelection = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === filteredRequests.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredRequests.map((r: any) => r.id)));
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkProcessing(true);
+
+    for (const requestId of selectedIds) {
+      try {
+        await updateDoc(doc(firebaseDb, 'hitlRequests', requestId), {
+          status: 'approved',
+          resolvedAt: new Date(),
+          resolvedBy: 'current_user',
+        });
+      } catch (error) {
+        console.error('Error approving:', error);
+      }
+    }
+
+    setSelectedIds(new Set());
+    setBulkProcessing(false);
+  };
+
+  const handleBulkReject = async () => {
+    if (selectedIds.size === 0) return;
+    const notes = prompt(`Reason for rejecting ${selectedIds.size} items:`);
+    if (!notes) return;
+
+    setBulkProcessing(true);
+
+    for (const requestId of selectedIds) {
+      try {
+        await updateDoc(doc(firebaseDb, 'hitlRequests', requestId), {
+          status: 'rejected',
+          resolvedAt: new Date(),
+          resolvedBy: 'current_user',
+          notes,
+        });
+      } catch (error) {
+        console.error('Error rejecting:', error);
+      }
+    }
+
+    setSelectedIds(new Set());
+    setBulkProcessing(false);
+  };
 
   const handleApprove = async (requestId: string) => {
     setProcessingId(requestId);
@@ -511,20 +595,130 @@ export function ReviewQueue() {
         <Badge variant="warning">{requests.length} pending</Badge>
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4 p-4 bg-gray-50 rounded-lg">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-gray-500" />
+          <span className="text-sm font-medium text-gray-700">Filters:</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">Category:</label>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="text-sm border rounded-md px-2 py-1 bg-white"
+          >
+            <option value="all">All Categories</option>
+            {categories.map((cat: string) => (
+              <option key={cat} value={cat}>
+                {getCategoryLabel(cat)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">Urgency:</label>
+          <select
+            value={urgencyFilter}
+            onChange={(e) => setUrgencyFilter(e.target.value)}
+            className="text-sm border rounded-md px-2 py-1 bg-white"
+          >
+            <option value="all">All Urgencies</option>
+            {urgencies.map((urg: string) => (
+              <option key={urg} value={urg}>
+                {urg.charAt(0).toUpperCase() + urg.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {filteredRequests.length !== requests.length && (
+          <Badge variant="secondary" className="ml-auto">
+            Showing {filteredRequests.length} of {requests.length}
+          </Badge>
+        )}
+      </div>
+
+      {/* Bulk Actions Toolbar */}
+      <div className="flex items-center justify-between p-3 bg-white border rounded-lg">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={selectAll}
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+          >
+            {selectedIds.size === filteredRequests.length && filteredRequests.length > 0 ? (
+              <CheckSquare className="w-4 h-4 text-primary" />
+            ) : (
+              <Square className="w-4 h-4" />
+            )}
+            Select All
+          </button>
+          {selectedIds.size > 0 && (
+            <span className="text-sm text-gray-500">
+              {selectedIds.size} selected
+            </span>
+          )}
+        </div>
+
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleBulkApprove}
+              disabled={bulkProcessing}
+            >
+              {bulkProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-1" />
+              ) : (
+                <CheckCircle className="w-4 h-4 mr-1" />
+              )}
+              Approve Selected
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleBulkReject}
+              disabled={bulkProcessing}
+            >
+              <XCircle className="w-4 h-4 mr-1" />
+              Reject Selected
+            </Button>
+          </div>
+        )}
+      </div>
+
       <div className="grid gap-4">
-        {requests.map((request: any) => {
+        {filteredRequests.map((request: any) => {
           const isExpanded = expandedId === request.id;
           const category = request.context?.category || 'unknown';
           const confidence = request.context?.confidence;
 
+          const isSelected = selectedIds.has(request.id);
+
           return (
-            <Card key={request.id} className="overflow-hidden">
+            <Card key={request.id} className={cn("overflow-hidden", isSelected && "ring-2 ring-primary")}>
               <CardHeader
                 className="pb-2 cursor-pointer hover:bg-gray-50 transition-colors"
                 onClick={() => setExpandedId(isExpanded ? null : request.id)}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
+                    {/* Selection checkbox */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelection(request.id);
+                      }}
+                      className="flex-shrink-0"
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="w-5 h-5 text-primary" />
+                      ) : (
+                        <Square className="w-5 h-5 text-gray-400 hover:text-gray-600" />
+                      )}
+                    </button>
                     {getCategoryIcon(category)}
                     <div>
                       <CardTitle className="text-base">{request.description}</CardTitle>

@@ -11,6 +11,11 @@ import {
   CheckCircle,
   Clock,
   AlertTriangle,
+  Workflow,
+  DollarSign,
+  FileSearch,
+  BarChart3,
+  Settings,
 } from 'lucide-react';
 import { useDocument, useDocuments, useParcels } from '@/hooks/useFirestore';
 import { Button } from '@/components/ui/button';
@@ -18,8 +23,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DocumentUpload } from '@/components/DocumentUpload';
 import { ParcelsList } from '@/components/ParcelsList';
+import { WorkflowStatus } from '@/components/WorkflowStatus';
+import { SiteAnalysis } from '@/components/SiteAnalysis';
+import { DueDiligenceDashboard } from '@/components/DueDiligenceDashboard';
+import { FinancialSummary } from '@/components/FinancialSummary';
+import { ProjectLifecycle } from '@/components/ProjectLifecycle';
 import { cn, formatDate, getStatusColor, formatCurrency } from '@/lib/utils';
 import type { Project, Document } from '@/types';
+
+type TabType = 'overview' | 'documents' | 'parcels' | 'workflows' | 'analysis' | 'dd' | 'financials' | 'upload';
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -33,7 +45,7 @@ export default function ProjectDetailPage() {
   const { data: documents, loading: documentsLoading } = useDocuments(projectId);
   const { data: parcels } = useParcels(projectId);
 
-  const [activeTab, setActiveTab] = useState<'documents' | 'parcels' | 'upload'>('documents');
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
 
   if (projectLoading) {
     return (
@@ -64,6 +76,17 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const tabs = [
+    { id: 'overview' as const, label: 'Overview', icon: <Settings className="w-4 h-4" /> },
+    { id: 'documents' as const, label: `Documents (${documents.length})`, icon: <FileText className="w-4 h-4" /> },
+    { id: 'parcels' as const, label: `Parcels (${parcels.length})`, icon: <MapPin className="w-4 h-4" /> },
+    { id: 'workflows' as const, label: 'Workflows', icon: <Workflow className="w-4 h-4" /> },
+    { id: 'analysis' as const, label: 'Site Analysis', icon: <BarChart3 className="w-4 h-4" /> },
+    { id: 'dd' as const, label: 'Due Diligence', icon: <FileSearch className="w-4 h-4" /> },
+    { id: 'financials' as const, label: 'Financials', icon: <DollarSign className="w-4 h-4" /> },
+    { id: 'upload' as const, label: 'Upload', icon: <Upload className="w-4 h-4" /> },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -90,8 +113,8 @@ export default function ProjectDetailPage() {
             </Badge>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-4 gap-4 mt-6">
+          {/* Quick Stats */}
+          <div className="grid grid-cols-5 gap-4 mt-6">
             <div className="bg-gray-50 p-4 rounded-lg">
               <p className="text-sm text-gray-500">Type</p>
               <p className="font-semibold capitalize">
@@ -110,6 +133,10 @@ export default function ProjectDetailPage() {
               <p className="text-sm text-gray-500">Target COD</p>
               <p className="font-semibold">{project.targetCod || 'TBD'}</p>
             </div>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <p className="text-sm text-gray-500">Parcels/Docs</p>
+              <p className="font-semibold">{parcels.length} / {documents.length}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -117,35 +144,142 @@ export default function ProjectDetailPage() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tabs */}
-        <div className="flex gap-4 mb-6">
-          <Button
-            variant={activeTab === 'documents' ? 'default' : 'ghost'}
-            onClick={() => setActiveTab('documents')}
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            Documents ({documents.length})
-          </Button>
-          <Button
-            variant={activeTab === 'parcels' ? 'default' : 'ghost'}
-            onClick={() => setActiveTab('parcels')}
-          >
-            <MapPin className="w-4 h-4 mr-2" />
-            Parcels ({parcels.length})
-          </Button>
-          <Button
-            variant={activeTab === 'upload' ? 'default' : 'ghost'}
-            onClick={() => setActiveTab('upload')}
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Upload
-          </Button>
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+          {tabs.map((tab) => (
+            <Button
+              key={tab.id}
+              variant={activeTab === tab.id ? 'default' : 'ghost'}
+              onClick={() => setActiveTab(tab.id)}
+              className="whitespace-nowrap"
+            >
+              {tab.icon}
+              <span className="ml-2">{tab.label}</span>
+            </Button>
+          ))}
         </div>
 
         {/* Tab Content */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            {/* Project Lifecycle */}
+            <ProjectLifecycle
+              projectId={projectId}
+              currentStatus={project.status || 'prospecting'}
+            />
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 gap-6">
+              {/* Recent Documents */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Recent Documents</CardTitle>
+                    <Button variant="ghost" size="sm" onClick={() => setActiveTab('documents')}>
+                      View All
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {documents.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No documents yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {documents.slice(0, 3).map((doc: any) => (
+                        <div key={doc.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                          <div className="flex items-center gap-2">
+                            {getDocumentStatusIcon(doc.status)}
+                            <span className="text-sm truncate max-w-[200px]">{doc.filename}</span>
+                          </div>
+                          <Badge className={cn('text-xs', getStatusColor(doc.status))}>
+                            {doc.status?.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Parcels Summary */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Parcels Summary</CardTitle>
+                    <Button variant="ghost" size="sm" onClick={() => setActiveTab('parcels')}>
+                      View All
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {parcels.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No parcels yet</p>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 bg-blue-50 rounded-lg text-center">
+                          <p className="text-2xl font-bold text-blue-700">{parcels.length}</p>
+                          <p className="text-xs text-blue-600">Total Parcels</p>
+                        </div>
+                        <div className="p-3 bg-green-50 rounded-lg text-center">
+                          <p className="text-2xl font-bold text-green-700">
+                            {parcels.reduce((sum: number, p: any) => sum + (p.acres || 0), 0).toFixed(0)}
+                          </p>
+                          <p className="text-xs text-green-600">Total Acres</p>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {parcels.filter((p: any) => p.status === 'leased').length} leased, {' '}
+                        {parcels.filter((p: any) => p.status === 'under_option').length} under option
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Quick Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-3 flex-wrap">
+                  <Button variant="outline" onClick={() => setActiveTab('upload')}>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload Document
+                  </Button>
+                  <Button variant="outline" onClick={() => setActiveTab('parcels')}>
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Add Parcel
+                  </Button>
+                  <Button variant="outline" onClick={() => setActiveTab('analysis')}>
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Run Site Analysis
+                  </Button>
+                  <Button variant="outline" onClick={() => setActiveTab('dd')}>
+                    <FileSearch className="w-4 h-4 mr-2" />
+                    Start Due Diligence
+                  </Button>
+                  <Button variant="outline" onClick={() => setActiveTab('workflows')}>
+                    <Workflow className="w-4 h-4 mr-2" />
+                    Start Workflow
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {activeTab === 'documents' && (
           <Card>
             <CardHeader>
-              <CardTitle>Documents</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Documents</CardTitle>
+                <Button onClick={() => setActiveTab('upload')}>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {documentsLoading ? (
@@ -205,6 +339,28 @@ export default function ProjectDetailPage() {
             county={project.county}
             state={project.state}
           />
+        )}
+
+        {activeTab === 'workflows' && (
+          <WorkflowStatus projectId={projectId} />
+        )}
+
+        {activeTab === 'analysis' && (
+          <SiteAnalysis
+            projectId={projectId}
+            parcels={parcels}
+            projectRequirements={{
+              requiredCapacityMw: project.capacityMwAc,
+            }}
+          />
+        )}
+
+        {activeTab === 'dd' && (
+          <DueDiligenceDashboard projectId={projectId} />
+        )}
+
+        {activeTab === 'financials' && (
+          <FinancialSummary project={project as any} />
         )}
 
         {activeTab === 'upload' && (

@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ReviewQueue } from '@/components/ReviewQueue';
+import { NotificationsPanel } from '@/components/NotificationsPanel';
 import { cn, formatDate, getStatusColor, formatCurrency } from '@/lib/utils';
 import type { Project } from '@/types';
 
@@ -59,6 +60,7 @@ export default function DashboardPage() {
               <span className="text-xl font-bold">Neurogrid</span>
             </div>
             <div className="flex items-center gap-4">
+              <NotificationsPanel onNavigate={(url) => router.push(url)} />
               <span className="text-sm text-gray-600">{user.email}</span>
               <Button variant="ghost" size="sm" onClick={handleSignOut}>
                 <LogOut className="w-4 h-4 mr-2" />
