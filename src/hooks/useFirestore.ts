@@ -56,7 +56,7 @@ export function useCollection<T extends DocumentData>(
         const items = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
-        })) as T[];
+        })) as unknown as T[];
         setData(items);
         setLoading(false);
         setError(null);
@@ -96,7 +96,7 @@ export function useDocument<T extends DocumentData>(
       docRef,
       (snapshot) => {
         if (snapshot.exists()) {
-          setData({ id: snapshot.id, ...snapshot.data() } as T);
+          setData({ id: snapshot.id, ...snapshot.data() } as unknown as T);
         } else {
           setData(null);
         }
