@@ -13,7 +13,7 @@ import {
   FolderOpen,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useProjects, useReviewQueue } from '@/hooks/useFirestore';
+import { useProjects, useReviewQueue, useAllDocuments, useAllParcels } from '@/hooks/useFirestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +25,8 @@ export default function DashboardPage() {
   const { user, signOut, loading: authLoading } = useAuth();
   const { data: projects, loading: projectsLoading } = useProjects();
   const { data: reviewItems } = useReviewQueue();
+  const { data: allDocuments } = useAllDocuments();
+  const { data: allParcels } = useAllParcels();
   const [activeTab, setActiveTab] = useState<'projects' | 'review'>('projects');
   const router = useRouter();
 
@@ -92,7 +94,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Documents</p>
-                  <p className="text-2xl font-bold">0</p>
+                  <p className="text-2xl font-bold">{allDocuments.length}</p>
                 </div>
               </div>
             </CardContent>
@@ -105,7 +107,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Parcels</p>
-                  <p className="text-2xl font-bold">0</p>
+                  <p className="text-2xl font-bold">{allParcels.length}</p>
                 </div>
               </div>
             </CardContent>

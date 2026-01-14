@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DocumentUpload } from '@/components/DocumentUpload';
+import { ParcelsList } from '@/components/ParcelsList';
 import { cn, formatDate, getStatusColor, formatCurrency } from '@/lib/utils';
 import type { Project, Document } from '@/types';
 
@@ -199,38 +200,11 @@ export default function ProjectDetailPage() {
         )}
 
         {activeTab === 'parcels' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Parcels</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {parcels.length === 0 ? (
-                <div className="text-center py-8">
-                  <MapPin className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-500">No parcels added yet</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {parcels.map((parcel: any) => (
-                    <div
-                      key={parcel.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium">APN: {parcel.apn}</p>
-                        <p className="text-sm text-gray-500">
-                          {parcel.acres} acres &bull; {parcel.zoning}
-                        </p>
-                      </div>
-                      <Badge className={getStatusColor(parcel.status)}>
-                        {parcel.status?.replace('_', ' ')}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <ParcelsList
+            projectId={projectId}
+            county={project.county}
+            state={project.state}
+          />
         )}
 
         {activeTab === 'upload' && (

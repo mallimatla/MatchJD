@@ -150,3 +150,17 @@ export function useParcels(projectId: string | null) {
     enabled: !!projectId,
   });
 }
+
+// Hook for all documents (for dashboard stats)
+export function useAllDocuments() {
+  return useCollection('documents', {
+    constraints: [orderBy('createdAt', 'desc')],
+  });
+}
+
+// Hook for all parcels (for dashboard stats)
+export function useAllParcels() {
+  return useCollection('parcels', {
+    constraints: [],
+  });
+}

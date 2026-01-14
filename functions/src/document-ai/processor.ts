@@ -119,16 +119,39 @@ export class DocumentProcessor {
     const filePath = decodeURIComponent(urlPath.split('/o/')[1]?.split('?')[0] || '');
 
     const [buffer] = await bucket.file(filePath).download();
+    const lowerPath = filePath.toLowerCase();
 
-    // For PDF files, use pdf-parse (simplified)
-    // In production, use Azure Document Intelligence for better OCR
-    if (filePath.endsWith('.pdf')) {
+    // For PDF files, use pdf-parse
+    if (lowerPath.endsWith('.pdf')) {
       const pdfParse = require('pdf-parse');
       const data = await pdfParse(buffer);
       return data.text;
     }
 
-    // For text files
+    // For DOCX files, use mammoth
+    if (lowerPath.endsWith('.docx')) {
+      const mammoth = require('mammoth');
+      const result = await mammoth.extractRawText({ buffer: buffer });
+      return result.value;
+    }
+
+    // For DOC files (legacy Word format) - attempt basic extraction
+    if (lowerPath.endsWith('.doc')) {
+      // DOC files are binary - mammoth doesn't support them well
+      // Try to extract any readable text content
+      const text = buffer.toString('utf-8');
+      // Filter out non-printable characters but keep the readable parts
+      const cleanText = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (cleanText.length > 100) {
+        return cleanText;
+      }
+      // If we couldn't extract meaningful text, return error message
+      return 'Error: Unable to extract text from legacy .doc format. Please convert to .docx or .pdf';
+    }
+
+    // For text files (.txt, etc.)
     return buffer.toString('utf-8');
   }
 

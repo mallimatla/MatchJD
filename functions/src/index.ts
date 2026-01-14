@@ -60,6 +60,7 @@ export const onDocumentUploaded = onDocumentUpdated(
             status: 'pending',
             description: `Review document extraction: ${after.filename}`,
             context: {
+              category: result.category,
               extractedData: result.extractedData,
               confidence: result.confidence,
               reviewReasons: result.reviewReasons,
@@ -221,6 +222,166 @@ export const getReviewQueue = onCall(async (request) => {
 
   return { success: true, data: requests };
 });
+
+/**
+ * Triggered when a HITL request is updated (approved/rejected).
+ * Handles downstream workflow actions.
+ */
+export const onHITLRequestUpdated = onDocumentUpdated(
+  'hitlRequests/{requestId}',
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    const requestId = event.params.requestId;
+
+    // Only process when status changes from 'pending' to 'approved' or 'rejected'
+    if (before?.status === 'pending' && after?.status !== 'pending') {
+      console.log(`HITL request ${requestId} resolved: ${after?.status}`);
+
+      const isApproved = after?.status === 'approved';
+      const documentId = after?.documentId;
+      const projectId = after?.projectId;
+      const tenantId = after?.tenantId;
+      const category = after?.context?.category;
+      const extractedData = after?.context?.extractedData;
+
+      try {
+        // Update the associated document status
+        if (documentId) {
+          await db.doc(`documents/${documentId}`).update({
+            status: isApproved ? 'approved' : 'rejected',
+            reviewedBy: after?.resolvedBy,
+            reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
+        // If approved and it's a lease document, create parcels from extracted data
+        if (isApproved && category === 'lease' && extractedData && projectId && tenantId) {
+          console.log(`Creating parcels from approved lease document: ${documentId}`);
+          await createParcelsFromLease(extractedData, projectId, tenantId, documentId);
+        }
+
+        // If approved and it's a PPA, update project with PPA info
+        if (isApproved && category === 'ppa' && extractedData && projectId) {
+          console.log(`Updating project with PPA data: ${projectId}`);
+          await db.doc(`projects/${projectId}`).update({
+            ppaStatus: 'executed',
+            ppaPrice: extractedData.contractPrice || extractedData.price?.contractPrice,
+            ppaBuyer: extractedData.buyer?.name || extractedData.buyer,
+            ppaTermYears: extractedData.termYears || extractedData.term,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
+        // Resume workflow if this was a workflow gate
+        if (after?.workflowId) {
+          const orchestrator = new WorkflowOrchestrator();
+          await orchestrator.resumeWorkflow(after.workflowId, {
+            approved: isApproved,
+            notes: after?.notes,
+            resolvedBy: after?.resolvedBy,
+          });
+        }
+
+        console.log(`HITL downstream actions completed for request: ${requestId}`);
+      } catch (error) {
+        console.error(`Error processing HITL downstream actions for ${requestId}:`, error);
+      }
+    }
+  }
+);
+
+/**
+ * Helper function to create parcels from lease extraction data
+ */
+async function createParcelsFromLease(
+  extractedData: any,
+  projectId: string,
+  tenantId: string,
+  documentId?: string
+): Promise<void> {
+  const parcelNumbers = extractedData.parcelNumbers || [];
+  const totalAcres = extractedData.totalAcres || 0;
+  const county = extractedData.county || '';
+  const state = extractedData.state || '';
+  const lessorName = extractedData.lessor?.name || '';
+  const lessorAddress = extractedData.lessor?.address || '';
+
+  // If no parcel numbers but we have acres, create a single parcel
+  if (parcelNumbers.length === 0 && totalAcres > 0) {
+    const parcelId = db.collection('parcels').doc().id;
+    await db.doc(`parcels/${parcelId}`).set({
+      projectId,
+      tenantId,
+      apn: `PENDING-${Date.now()}`,
+      county,
+      state,
+      acres: totalAcres,
+      zoning: 'TBD',
+      landUse: 'Agricultural',
+      ownerName: lessorName,
+      ownerAddress: lessorAddress,
+      status: 'leased',
+      assessedValue: 0,
+      marketValue: 0,
+      sourceDocumentId: documentId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`Created single parcel for lease with ${totalAcres} acres`);
+    return;
+  }
+
+  // Create a parcel for each parcel number
+  const acresPerParcel = parcelNumbers.length > 0 ? totalAcres / parcelNumbers.length : 0;
+
+  for (const apn of parcelNumbers) {
+    // Check if parcel already exists
+    const existing = await db
+      .collection('parcels')
+      .where('tenantId', '==', tenantId)
+      .where('projectId', '==', projectId)
+      .where('apn', '==', apn)
+      .limit(1)
+      .get();
+
+    if (!existing.empty) {
+      // Update existing parcel
+      await existing.docs[0].ref.update({
+        status: 'leased',
+        ownerName: lessorName,
+        ownerAddress: lessorAddress,
+        acres: acresPerParcel || existing.docs[0].data().acres,
+        sourceDocumentId: documentId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log(`Updated existing parcel: ${apn}`);
+    } else {
+      // Create new parcel
+      const parcelId = db.collection('parcels').doc().id;
+      await db.doc(`parcels/${parcelId}`).set({
+        projectId,
+        tenantId,
+        apn,
+        county,
+        state,
+        acres: acresPerParcel,
+        zoning: 'TBD',
+        landUse: 'Agricultural',
+        ownerName: lessorName,
+        ownerAddress: lessorAddress,
+        status: 'leased',
+        assessedValue: 0,
+        marketValue: 0,
+        sourceDocumentId: documentId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log(`Created new parcel: ${apn}`);
+    }
+  }
+}
 
 // ============================================
 // Workflow Functions
