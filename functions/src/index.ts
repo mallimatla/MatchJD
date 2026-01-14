@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
-import { onCall, onRequest } from 'firebase-functions/v2/https';
-import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { onCall } from 'firebase-functions/v2/https';
+import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { DocumentProcessor } from './document-ai/processor';
 import { WorkflowOrchestrator } from './workflows/orchestrator';
 import { AgentRunner } from './agents/runner';
