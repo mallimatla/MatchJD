@@ -323,13 +323,16 @@ export function DueDiligenceDashboard({ projectId }: DueDiligenceDashboardProps)
 
   useEffect(() => {
     const user = firebaseAuth.currentUser;
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
+    // Simple query without orderBy to avoid index requirement
     const q = query(
       collection(firebaseDb, 'ddWorkstreams'),
-      where('tenantId', '==', user.uid),
       where('projectId', '==', projectId),
-      orderBy('createdAt', 'asc')
+      where('tenantId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -337,10 +340,17 @@ export function DueDiligenceDashboard({ projectId }: DueDiligenceDashboardProps)
         id: doc.id,
         ...doc.data(),
       })) as DDWorkstream[];
+      // Sort client-side instead
+      data.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.() || a.createdAt || 0;
+        const bTime = b.createdAt?.toDate?.() || b.createdAt || 0;
+        return new Date(aTime).getTime() - new Date(bTime).getTime();
+      });
       setWorkstreams(data);
       setLoading(false);
     }, (error) => {
       console.error('Error fetching DD workstreams:', error);
+      alert('Error loading workstreams: ' + error.message);
       setLoading(false);
     });
 
@@ -349,12 +359,17 @@ export function DueDiligenceDashboard({ projectId }: DueDiligenceDashboardProps)
 
   const handleAddWorkstream = async (templateKey: string) => {
     const user = firebaseAuth.currentUser;
-    if (!user) return;
+    if (!user) {
+      alert('Please log in to add workstreams');
+      return;
+    }
 
     setAdding(true);
     try {
       const template = DD_TEMPLATES[templateKey];
-      await addDoc(collection(firebaseDb, 'ddWorkstreams'), {
+      console.log('Adding workstream:', template.name, 'for project:', projectId);
+
+      const docRef = await addDoc(collection(firebaseDb, 'ddWorkstreams'), {
         projectId,
         tenantId: user.uid,
         name: template.name,
@@ -370,9 +385,12 @@ export function DueDiligenceDashboard({ projectId }: DueDiligenceDashboardProps)
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      console.log('Workstream added with ID:', docRef.id);
       setShowAddMenu(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding workstream:', error);
+      alert('Error adding workstream: ' + error.message);
     }
     setAdding(false);
   };
