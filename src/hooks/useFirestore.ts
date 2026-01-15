@@ -124,10 +124,12 @@ export function useProjects() {
 }
 
 // Hook for documents in a project with real-time updates
+// Note: Removed orderBy to avoid composite index requirement (tenantId + projectId + createdAt)
+// Client-side sorting can be done if needed
 export function useDocuments(projectId: string | null) {
   return useCollection('documents', {
     constraints: projectId
-      ? [where('projectId', '==', projectId), orderBy('createdAt', 'desc')]
+      ? [where('projectId', '==', projectId)]
       : [],
     enabled: !!projectId,
   });
@@ -152,9 +154,10 @@ export function useParcels(projectId: string | null) {
 }
 
 // Hook for all documents (for dashboard stats)
+// Note: No orderBy to avoid composite index requirement with tenantId
 export function useAllDocuments() {
   return useCollection('documents', {
-    constraints: [orderBy('createdAt', 'desc')],
+    constraints: [],
   });
 }
 
