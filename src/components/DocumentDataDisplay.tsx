@@ -35,9 +35,61 @@ interface DocumentDisplayConfig {
 }
 
 // Helper to get nested value from object using dot notation
+// Also tries to extract meaningful values from objects (like .name or .value)
 function getNestedValue(obj: any, path: string): any {
   if (!obj || !path) return undefined;
-  return path.split('.').reduce((current, key) => current?.[key], obj);
+
+  // First try the exact path
+  let value = path.split('.').reduce((current, key) => current?.[key], obj);
+
+  // If value is an object, try to extract a meaningful value
+  if (value !== null && value !== undefined && typeof value === 'object' && !Array.isArray(value)) {
+    // Common nested properties to look for
+    if (value.name !== undefined) return value.name;
+    if (value.value !== undefined) return value.value;
+    if (value.amount !== undefined) return value.amount;
+    if (value.total !== undefined) return value.total;
+    // If it has a single key, return that value
+    const keys = Object.keys(value);
+    if (keys.length === 1) return value[keys[0]];
+  }
+
+  return value;
+}
+
+// Smart value extractor - tries multiple paths to find data
+function extractValue(data: any, path: string): any {
+  if (!data || !path) return undefined;
+
+  // Try exact path first
+  let value = getNestedValue(data, path);
+  if (value !== undefined && value !== null) return value;
+
+  // Try path.name (for nested party objects)
+  value = getNestedValue(data, `${path}.name`);
+  if (value !== undefined && value !== null) return value;
+
+  // Try path.value
+  value = getNestedValue(data, `${path}.value`);
+  if (value !== undefined && value !== null) return value;
+
+  // For price-related fields, try nested price object
+  if (path.toLowerCase().includes('price') || path.toLowerCase().includes('cost')) {
+    value = getNestedValue(data, `price.${path}`);
+    if (value !== undefined && value !== null) return value;
+    value = getNestedValue(data, `price.contractPrice`);
+    if (value !== undefined && value !== null) return value;
+  }
+
+  // For escalation fields
+  if (path.toLowerCase().includes('escalation')) {
+    value = getNestedValue(data, `price.annualEscalation`);
+    if (value !== undefined && value !== null) return value;
+    value = getNestedValue(data, `rent.annualEscalationPercent`);
+    if (value !== undefined && value !== null) return value;
+  }
+
+  return undefined;
 }
 
 // Format value based on type
@@ -185,7 +237,7 @@ export function CompactDocumentPreview({
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
       {visibleFields.map((field, i) => {
-        const value = getNestedValue(data, field.path);
+        const value = extractValue(data, field.path);
         if (value === undefined || value === null) return null;
 
         return (
@@ -310,7 +362,7 @@ export function DocumentDataDisplay({
           <div className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {visibleFields.map((field, i) => {
-                const value = getNestedValue(data, field.path);
+                const value = extractValue(data, field.path);
                 const Icon = getFieldIcon(field.type);
 
                 return (
@@ -337,7 +389,7 @@ export function DocumentDataDisplay({
     return (
       <div className={cn('flex flex-wrap gap-3', className)}>
         {visibleFields.slice(0, 6).map((field, i) => {
-          const value = getNestedValue(data, field.path);
+          const value = extractValue(data, field.path);
 
           return (
             <div key={i} className="text-sm">
@@ -362,11 +414,61 @@ export function DocumentDataDisplay({
     'bg-amber-50 text-amber-700',
   ];
 
+  // Check if any configured fields have actual data
+  const fieldsWithData = visibleFields.filter((field) => {
+    const value = extractValue(data, field.path);
+    return value !== undefined && value !== null;
+  });
+
+  // If no configured fields have data, show raw extracted data instead
+  if (fieldsWithData.length === 0 && Object.keys(data).length > 0) {
+    return (
+      <div className={cn('space-y-3', className)}>
+        <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+          Note: Configured field paths don&apos;t match extracted data. Showing raw extraction results:
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {Object.entries(data).slice(0, 12).map(([key, value], i) => {
+            const colorScheme = colorSchemes[i % colorSchemes.length];
+            const [bgColor, textColor] = colorScheme.split(' ');
+
+            // Format the key for display
+            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+
+            // Format the value - handle nested objects
+            let displayValue: string;
+            if (value === null || value === undefined) {
+              displayValue = 'N/A';
+            } else if (typeof value === 'object' && !Array.isArray(value)) {
+              displayValue = (value as any).name || (value as any).value || JSON.stringify(value);
+            } else if (Array.isArray(value)) {
+              displayValue = value.join(', ') || 'Empty';
+            } else {
+              displayValue = String(value);
+            }
+
+            return (
+              <div key={i} className={cn('p-3 rounded-lg', bgColor)}>
+                <div className={cn('flex items-center gap-2 font-medium text-sm mb-1', textColor)}>
+                  <FileText className="w-3.5 h-3.5" />
+                  {label}
+                </div>
+                <div className="text-sm text-gray-900 font-medium">
+                  {displayValue}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={cn('space-y-3', className)}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {visibleFields.map((field, i) => {
-          const value = getNestedValue(data, field.path);
+          const value = extractValue(data, field.path);
           const Icon = getFieldIcon(field.type);
           const colorScheme = colorSchemes[i % colorSchemes.length];
           const [bgColor, textColor] = colorScheme.split(' ');
