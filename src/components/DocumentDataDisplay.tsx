@@ -178,8 +178,8 @@ export function CompactDocumentPreview({
       doc(firebaseDb, 'config', 'documentDisplay'),
       (snapshot) => {
         if (snapshot.exists()) {
-          const configs = snapshot.data().configs as DocumentDisplayConfig[];
-          const displayConfig = configs.find((c) => c.category === category);
+          const configs = snapshot.data()?.configs as DocumentDisplayConfig[] | undefined;
+          const displayConfig = configs?.find((c) => c.category === category);
           setConfig(displayConfig || null);
         }
       },
@@ -274,8 +274,8 @@ export function DocumentDataDisplay({
       doc(firebaseDb, 'config', 'documentDisplay'),
       (snapshot) => {
         if (snapshot.exists()) {
-          const configs = snapshot.data().configs as DocumentDisplayConfig[];
-          const displayConfig = configs.find((c) => c.category === category);
+          const configs = snapshot.data()?.configs as DocumentDisplayConfig[] | undefined;
+          const displayConfig = configs?.find((c) => c.category === category);
           setConfig(displayConfig || null);
         }
         setLoading(false);
@@ -524,7 +524,7 @@ export function useAllDocumentDisplayConfigs() {
       doc(firebaseDb, 'config', 'documentDisplay'),
       (snapshot) => {
         if (snapshot.exists()) {
-          setConfigs(snapshot.data().configs as DocumentDisplayConfig[] || []);
+          setConfigs(snapshot.data()?.configs || []);
         }
         setLoading(false);
       },
