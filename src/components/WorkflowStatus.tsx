@@ -485,7 +485,7 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
         data: {},
         history: [{
           node: 'started',
-          timestamp: serverTimestamp(),
+          timestamp: new Date(),
           action: 'Workflow started'
         }],
         createdAt: serverTimestamp(),
@@ -516,7 +516,7 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
         ...(workflow.history || []),
         {
           node: definition.steps[currentIndex].name,
-          timestamp: serverTimestamp(),
+          timestamp: new Date(),
           action: 'Step completed'
         }
       ];
