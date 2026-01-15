@@ -17,8 +17,11 @@ import {
   ChevronUp,
   Info,
   SkipForward,
+  Bot,
+  Workflow,
+  Zap,
 } from 'lucide-react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { firebaseDb, firebaseAuth } from '@/lib/firebase';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -46,17 +49,24 @@ interface WorkflowStatusProps {
   onWorkflowStart?: (workflowType: string, workflowId: string) => void;
 }
 
-const WORKFLOW_DEFINITIONS: Record<string, {
+interface WorkflowDefinition {
+  id: string;
   label: string;
   description: string;
   icon: React.ReactNode;
   prerequisites: { type: string; message: string }[];
   steps: { name: string; label: string; description: string; requiresReview?: boolean }[];
-}> = {
+  enabled: boolean;
+}
+
+// Default workflow definitions (fallback if admin config not loaded)
+const DEFAULT_WORKFLOW_DEFINITIONS: Record<string, WorkflowDefinition> = {
   land_acquisition: {
+    id: 'land_acquisition',
     label: 'Land Acquisition',
     description: 'Complete land acquisition process from site analysis to lease execution',
     icon: <MapPin className="w-5 h-5" />,
+    enabled: true,
     prerequisites: [
       { type: 'parcels', message: 'Add at least one parcel to the project before starting this workflow' },
     ],
@@ -69,9 +79,11 @@ const WORKFLOW_DEFINITIONS: Record<string, {
     ],
   },
   project_lifecycle: {
+    id: 'project_lifecycle',
     label: 'Project Lifecycle',
     description: 'Manage project through development milestones to construction',
     icon: <Building className="w-5 h-5" />,
+    enabled: true,
     prerequisites: [],
     steps: [
       { name: 'prospecting', label: 'Prospecting', description: 'Initial site identification and assessment' },
@@ -81,9 +93,11 @@ const WORKFLOW_DEFINITIONS: Record<string, {
     ],
   },
   document_processing: {
+    id: 'document_processing',
     label: 'Document Processing',
     description: 'AI-powered extraction and classification of legal documents',
     icon: <FileText className="w-5 h-5" />,
+    enabled: true,
     prerequisites: [
       { type: 'documents', message: 'Upload at least one document before starting this workflow' },
     ],
@@ -97,16 +111,81 @@ const WORKFLOW_DEFINITIONS: Record<string, {
   },
 };
 
+// Get icon for workflow based on type or name
+function getWorkflowIcon(workflowId: string, workflowName: string): React.ReactNode {
+  const idLower = workflowId.toLowerCase();
+  const nameLower = workflowName.toLowerCase();
+
+  if (idLower.includes('document') || nameLower.includes('document')) {
+    return <FileText className="w-5 h-5" />;
+  }
+  if (idLower.includes('land') || nameLower.includes('land') || nameLower.includes('acquisition')) {
+    return <MapPin className="w-5 h-5" />;
+  }
+  if (idLower.includes('lifecycle') || nameLower.includes('lifecycle') || nameLower.includes('project')) {
+    return <Building className="w-5 h-5" />;
+  }
+  if (idLower.includes('ai') || nameLower.includes('ai')) {
+    return <Bot className="w-5 h-5" />;
+  }
+  return <Workflow className="w-5 h-5" />;
+}
+
+// Convert admin workflow config to UI-friendly format
+function convertAdminWorkflow(adminWorkflow: any): WorkflowDefinition {
+  // Determine prerequisites based on workflow triggers or name
+  const prerequisites: { type: string; message: string }[] = [];
+  const nameLower = adminWorkflow.name?.toLowerCase() || '';
+  const idLower = adminWorkflow.id?.toLowerCase() || '';
+
+  if (nameLower.includes('document') || idLower.includes('document')) {
+    prerequisites.push({ type: 'documents', message: 'Upload at least one document before starting this workflow' });
+  }
+  if (nameLower.includes('land') || nameLower.includes('acquisition') || nameLower.includes('parcel')) {
+    prerequisites.push({ type: 'parcels', message: 'Add at least one parcel to the project before starting this workflow' });
+  }
+
+  // Convert nodes to steps - filter out trigger and end nodes for step display
+  const steps = (adminWorkflow.nodes || [])
+    .filter((node: any) => !node.type?.startsWith('trigger_') && !node.type?.startsWith('end_'))
+    .map((node: any) => ({
+      name: node.id || node.name,
+      label: node.name || node.type?.replace(/_/g, ' '),
+      description: node.description || '',
+      requiresReview: node.type === 'hitl_gate' || node.type?.includes('review'),
+    }));
+
+  // If no nodes defined, use the legacy steps array
+  const finalSteps = steps.length > 0 ? steps : (adminWorkflow.steps || []).map((step: any) => ({
+    name: step.name || step.id,
+    label: step.label || step.name,
+    description: step.description || '',
+    requiresReview: step.requiresHitl || step.requiresReview || false,
+  }));
+
+  return {
+    id: adminWorkflow.id,
+    label: adminWorkflow.name || adminWorkflow.id,
+    description: adminWorkflow.description || 'Custom workflow',
+    icon: getWorkflowIcon(adminWorkflow.id, adminWorkflow.name || ''),
+    enabled: adminWorkflow.enabled !== false,
+    prerequisites,
+    steps: finalSteps,
+  };
+}
+
 function PrerequisiteModal({
   workflowType,
+  workflowDefinitions,
   onClose,
   missingPrereqs
 }: {
   workflowType: string;
+  workflowDefinitions: Record<string, WorkflowDefinition>;
   onClose: () => void;
   missingPrereqs: string[];
 }) {
-  const definition = WORKFLOW_DEFINITIONS[workflowType];
+  const definition = workflowDefinitions[workflowType];
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -140,18 +219,20 @@ function PrerequisiteModal({
 
 function WorkflowProgress({
   workflow,
+  workflowDefinitions,
   expanded,
   onToggle,
   onAdvanceStep,
   advancing
 }: {
   workflow: Workflow;
+  workflowDefinitions: Record<string, WorkflowDefinition>;
   expanded: boolean;
   onToggle: () => void;
   onAdvanceStep: () => void;
   advancing: boolean;
 }) {
-  const definition = WORKFLOW_DEFINITIONS[workflow.workflowType];
+  const definition = workflowDefinitions[workflow.workflowType];
   if (!definition) return null;
 
   const currentIndex = workflow.currentStepIndex || 0;
@@ -324,18 +405,20 @@ function WorkflowProgress({
 
 function WorkflowInfoCard({
   type,
+  workflowDefinitions,
   onStart,
   starting,
   canStart,
   prereqMessage
 }: {
   type: string;
+  workflowDefinitions: Record<string, WorkflowDefinition>;
   onStart: () => void;
   starting: boolean;
   canStart: boolean;
   prereqMessage?: string;
 }) {
-  const definition = WORKFLOW_DEFINITIONS[type];
+  const definition = workflowDefinitions[type];
   if (!definition) return null;
 
   return (
@@ -391,11 +474,44 @@ function WorkflowInfoCard({
 
 export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0, onWorkflowStart }: WorkflowStatusProps) {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [workflowDefinitions, setWorkflowDefinitions] = useState<Record<string, WorkflowDefinition>>(DEFAULT_WORKFLOW_DEFINITIONS);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [prereqModal, setPrereqModal] = useState<{ type: string; messages: string[] } | null>(null);
+
+  // Load workflow definitions from admin config
+  useEffect(() => {
+    const loadWorkflowDefinitions = async () => {
+      try {
+        const configDoc = await getDoc(doc(firebaseDb, 'config', 'workflows'));
+        if (configDoc.exists()) {
+          const adminConfigs = configDoc.data().configs || [];
+          const definitions: Record<string, WorkflowDefinition> = {};
+
+          // Convert admin configs to workflow definitions
+          for (const adminWorkflow of adminConfigs) {
+            if (adminWorkflow.enabled !== false) {
+              const converted = convertAdminWorkflow(adminWorkflow);
+              definitions[adminWorkflow.id] = converted;
+            }
+          }
+
+          // Merge with defaults (admin configs take precedence)
+          setWorkflowDefinitions(prev => ({
+            ...prev,
+            ...definitions
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading workflow definitions:', error);
+        // Keep using defaults on error
+      }
+    };
+
+    loadWorkflowDefinitions();
+  }, []);
 
   useEffect(() => {
     const user = firebaseAuth.currentUser;
@@ -441,7 +557,7 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
   }, [projectId, expandedId]);
 
   const checkPrerequisites = (workflowType: string): string[] => {
-    const definition = WORKFLOW_DEFINITIONS[workflowType];
+    const definition = workflowDefinitions[workflowType];
     if (!definition) return [];
 
     const missing: string[] = [];
@@ -472,7 +588,7 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
 
     setStarting(workflowType);
     try {
-      const definition = WORKFLOW_DEFINITIONS[workflowType];
+      const definition = workflowDefinitions[workflowType];
       const firstStep = definition.steps[0];
 
       const docRef = await addDoc(collection(firebaseDb, 'workflows'), {
@@ -480,7 +596,7 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
         tenantId: user.uid,
         workflowType,
         status: 'running',
-        currentNode: firstStep.name,
+        currentNode: firstStep?.name || 'start',
         currentStepIndex: 0,
         data: {},
         history: [{
@@ -508,7 +624,7 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
   const handleAdvanceStep = async (workflow: Workflow) => {
     setAdvancing(workflow.id);
     try {
-      const definition = WORKFLOW_DEFINITIONS[workflow.workflowType];
+      const definition = workflowDefinitions[workflow.workflowType];
       const currentIndex = workflow.currentStepIndex || 0;
       const isLastStep = currentIndex >= definition.steps.length - 1;
 
@@ -567,6 +683,7 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
       {prereqModal && (
         <PrerequisiteModal
           workflowType={prereqModal.type}
+          workflowDefinitions={workflowDefinitions}
           missingPrereqs={prereqModal.messages}
           onClose={() => setPrereqModal(null)}
         />
@@ -575,34 +692,33 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Workflows</CardTitle>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleStartWorkflow('land_acquisition')}
-                disabled={starting !== null}
-              >
-                {starting === 'land_acquisition' ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <Play className="w-4 h-4 mr-2" />
-                )}
-                Start Land Acquisition
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleStartWorkflow('project_lifecycle')}
-                disabled={starting !== null}
-              >
-                {starting === 'project_lifecycle' ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <Play className="w-4 h-4 mr-2" />
-                )}
-                Start Lifecycle
-              </Button>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="w-5 h-5" />
+              Workflows
+              <Badge variant="secondary" className="ml-2">
+                {Object.keys(workflowDefinitions).filter(k => workflowDefinitions[k].enabled).length} available
+              </Badge>
+            </CardTitle>
+            <div className="flex gap-2 flex-wrap justify-end">
+              {Object.entries(workflowDefinitions)
+                .filter(([_, def]) => def.enabled)
+                .slice(0, 2)
+                .map(([key, def]) => (
+                  <Button
+                    key={key}
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleStartWorkflow(key)}
+                    disabled={starting !== null}
+                  >
+                    {starting === key ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : (
+                      <Play className="w-4 h-4 mr-2" />
+                    )}
+                    {def.label}
+                  </Button>
+                ))}
             </div>
           </div>
         </CardHeader>
@@ -618,19 +734,22 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
               </div>
 
               <div className="grid gap-4">
-                <WorkflowInfoCard
-                  type="land_acquisition"
-                  onStart={() => handleStartWorkflow('land_acquisition')}
-                  starting={starting === 'land_acquisition'}
-                  canStart={parcelsCount > 0}
-                  prereqMessage={parcelsCount === 0 ? 'Requires parcels' : undefined}
-                />
-                <WorkflowInfoCard
-                  type="project_lifecycle"
-                  onStart={() => handleStartWorkflow('project_lifecycle')}
-                  starting={starting === 'project_lifecycle'}
-                  canStart={true}
-                />
+                {Object.entries(workflowDefinitions)
+                  .filter(([_, def]) => def.enabled)
+                  .map(([key, def]) => {
+                    const missingPrereqs = checkPrerequisites(key);
+                    return (
+                      <WorkflowInfoCard
+                        key={key}
+                        type={key}
+                        workflowDefinitions={workflowDefinitions}
+                        onStart={() => handleStartWorkflow(key)}
+                        starting={starting === key}
+                        canStart={missingPrereqs.length === 0}
+                        prereqMessage={missingPrereqs[0]}
+                      />
+                    );
+                  })}
               </div>
             </div>
           ) : (
@@ -647,6 +766,7 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
                       <div key={workflow.id} className="p-4 bg-gray-50 rounded-lg border">
                         <WorkflowProgress
                           workflow={workflow}
+                          workflowDefinitions={workflowDefinitions}
                           expanded={expandedId === workflow.id}
                           onToggle={() => setExpandedId(expandedId === workflow.id ? null : workflow.id)}
                           onAdvanceStep={() => handleAdvanceStep(workflow)}
@@ -670,6 +790,7 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
                       <div key={workflow.id} className="p-4 bg-red-50 rounded-lg border border-red-200">
                         <WorkflowProgress
                           workflow={workflow}
+                          workflowDefinitions={workflowDefinitions}
                           expanded={expandedId === workflow.id}
                           onToggle={() => setExpandedId(expandedId === workflow.id ? null : workflow.id)}
                           onAdvanceStep={() => handleAdvanceStep(workflow)}
@@ -696,6 +817,7 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
                       >
                         <WorkflowProgress
                           workflow={workflow}
+                          workflowDefinitions={workflowDefinitions}
                           expanded={expandedId === workflow.id}
                           onToggle={() => setExpandedId(expandedId === workflow.id ? null : workflow.id)}
                           onAdvanceStep={() => {}}
@@ -710,25 +832,29 @@ export function WorkflowStatus({ projectId, parcelsCount = 0, documentsCount = 0
               {/* Start new workflow buttons */}
               <div className="border-t pt-4">
                 <p className="text-sm text-gray-500 mb-3">Start another workflow:</p>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleStartWorkflow('land_acquisition')}
-                    disabled={starting !== null || parcelsCount === 0}
-                  >
-                    <Play className="w-4 h-4 mr-1" />
-                    Land Acquisition
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleStartWorkflow('project_lifecycle')}
-                    disabled={starting !== null}
-                  >
-                    <Play className="w-4 h-4 mr-1" />
-                    Project Lifecycle
-                  </Button>
+                <div className="flex gap-2 flex-wrap">
+                  {Object.entries(workflowDefinitions)
+                    .filter(([_, def]) => def.enabled)
+                    .map(([key, def]) => {
+                      const missingPrereqs = checkPrerequisites(key);
+                      return (
+                        <Button
+                          key={key}
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleStartWorkflow(key)}
+                          disabled={starting !== null || missingPrereqs.length > 0}
+                          title={missingPrereqs[0] || `Start ${def.label}`}
+                        >
+                          {starting === key ? (
+                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                          ) : (
+                            <Play className="w-4 h-4 mr-1" />
+                          )}
+                          {def.label}
+                        </Button>
+                      );
+                    })}
                 </div>
               </div>
             </div>
