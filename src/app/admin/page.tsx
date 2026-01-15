@@ -475,30 +475,17 @@ export default function AdminPage() {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [editingField, setEditingField] = useState<string | null>(null);
 
-  // Check if user is admin
+  // Check if user is admin - ONLY users in ADMIN_EMAILS list can access
   useEffect(() => {
-    const checkAdmin = async () => {
+    const checkAdmin = () => {
       if (!user) {
         setAdminCheckComplete(true);
         return;
       }
 
-      try {
-        // Check if user email is in admin list
-        const emailIsAdmin = ADMIN_EMAILS.includes(user.email || '');
-
-        // Also check user document for admin role
-        const userDoc = await getDoc(doc(firebaseDb, 'users', user.uid));
-        const roleIsAdmin = userDoc.exists() && userDoc.data()?.role === 'admin';
-
-        // User is admin if email matches OR has admin role in Firestore
-        setIsAdmin(emailIsAdmin || roleIsAdmin);
-      } catch (error) {
-        console.error('Error checking admin status:', error);
-        // If we can't check, allow access if email matches admin list
-        setIsAdmin(ADMIN_EMAILS.includes(user.email || ''));
-      }
-
+      // ONLY allow users whose email is in the ADMIN_EMAILS list
+      const emailIsAdmin = ADMIN_EMAILS.includes(user.email || '');
+      setIsAdmin(emailIsAdmin);
       setAdminCheckComplete(true);
     };
 

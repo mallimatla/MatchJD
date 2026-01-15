@@ -62,7 +62,7 @@ export function useAuth() {
         email,
         displayName,
         tenantId: user.uid, // Use UID as tenant ID for single-tenant setup
-        role: 'admin',
+        role: 'user', // Default role is 'user', not 'admin'
         createdAt: new Date(),
       });
     } catch (error: any) {
@@ -88,7 +88,7 @@ export function useAuth() {
           email: user.email,
           displayName: user.displayName || user.email,
           tenantId: user.uid,
-          role: 'admin',
+          role: 'user', // Default role is 'user', not 'admin'
           createdAt: new Date(),
         });
       }
