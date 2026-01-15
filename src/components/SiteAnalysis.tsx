@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   MapPin,
   Zap,
@@ -13,12 +13,17 @@ import {
   Loader2,
   BarChart3,
   RefreshCw,
+  History,
+  Trash2,
+  Calendar,
 } from 'lucide-react';
 import { httpsCallable, getFunctions } from 'firebase/functions';
+import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { firebaseDb, firebaseAuth } from '@/lib/firebase';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { cn } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import type { Parcel } from '@/types';
 
 interface SiteAnalysisProps {
@@ -68,6 +73,21 @@ interface AnalysisResult {
   };
   recommendation: 'proceed' | 'proceed_with_caution' | 'not_recommended';
   recommendationNotes: string;
+}
+
+interface SavedAnalysis {
+  id: string;
+  projectId: string;
+  tenantId: string;
+  createdAt: any;
+  parcelsAnalyzed: number;
+  results: AnalysisResult[];
+  summary: {
+    recommended: number;
+    withCaution: number;
+    notRecommended: number;
+    averageScore: number;
+  };
 }
 
 function ScoreGauge({ score, label }: { score: number; label: string }) {
@@ -288,6 +308,58 @@ export function SiteAnalysis({ projectId, parcels, projectRequirements }: SiteAn
   const [analyzing, setAnalyzing] = useState(false);
   const [results, setResults] = useState<AnalysisResult[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [selectedAnalysis, setSelectedAnalysis] = useState<SavedAnalysis | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Load previous analyses on mount
+  useEffect(() => {
+    const loadPreviousAnalyses = async () => {
+      const user = firebaseAuth.currentUser;
+      if (!user) {
+        setLoadingHistory(false);
+        return;
+      }
+
+      try {
+        // Simple query without orderBy to avoid index requirement
+        const q = query(
+          collection(firebaseDb, 'siteAnalyses'),
+          where('projectId', '==', projectId),
+          where('tenantId', '==', user.uid)
+        );
+
+        const snapshot = await getDocs(q);
+        const analyses: SavedAnalysis[] = [];
+        snapshot.forEach((doc) => {
+          analyses.push({ id: doc.id, ...doc.data() } as SavedAnalysis);
+        });
+
+        // Sort client-side by createdAt descending
+        analyses.sort((a, b) => {
+          const aCreated = a.createdAt as any;
+          const bCreated = b.createdAt as any;
+          const aTime = aCreated?.toDate ? aCreated.toDate() : aCreated || 0;
+          const bTime = bCreated?.toDate ? bCreated.toDate() : bCreated || 0;
+          return new Date(bTime).getTime() - new Date(aTime).getTime();
+        });
+
+        setSavedAnalyses(analyses);
+
+        // Load most recent analysis results if available
+        if (analyses.length > 0) {
+          setResults(analyses[0].results);
+          setSelectedAnalysis(analyses[0]);
+        }
+      } catch (err) {
+        console.error('Error loading previous analyses:', err);
+      }
+      setLoadingHistory(false);
+    };
+
+    loadPreviousAnalyses();
+  }, [projectId]);
 
   const handleAnalyze = async () => {
     if (parcels.length === 0) return;
@@ -335,13 +407,87 @@ export function SiteAnalysis({ projectId, parcels, projectRequirements }: SiteAn
       }
 
       setResults(analysisResults);
+      await saveAnalysisToFirestore(analysisResults);
     } catch (err) {
       console.error('Error running site analysis:', err);
-      setError('Failed to complete site analysis. Please try again.');
+      setError('Failed to complete site analysis. Using demo results.');
       // Generate mock results for demo
-      setResults(parcels.map(parcel => generateMockResult(parcel)));
+      const mockResults = parcels.map(parcel => generateMockResult(parcel));
+      setResults(mockResults);
+      await saveAnalysisToFirestore(mockResults);
     }
     setAnalyzing(false);
+  };
+
+  const saveAnalysisToFirestore = async (analysisResults: AnalysisResult[]) => {
+    const user = firebaseAuth.currentUser;
+    if (!user || analysisResults.length === 0) return;
+
+    try {
+      const recommended = analysisResults.filter(r => r.recommendation === 'proceed').length;
+      const withCaution = analysisResults.filter(r => r.recommendation === 'proceed_with_caution').length;
+      const notRecommended = analysisResults.filter(r => r.recommendation === 'not_recommended').length;
+      const averageScore = Math.round(
+        analysisResults.reduce((sum, r) => sum + r.suitabilityScore, 0) / analysisResults.length
+      );
+
+      const analysisDoc = {
+        projectId,
+        tenantId: user.uid,
+        createdAt: new Date(),
+        parcelsAnalyzed: analysisResults.length,
+        results: analysisResults,
+        summary: {
+          recommended,
+          withCaution,
+          notRecommended,
+          averageScore,
+        },
+      };
+
+      const docRef = await addDoc(collection(firebaseDb, 'siteAnalyses'), analysisDoc);
+
+      // Update local state
+      const newSavedAnalysis: SavedAnalysis = {
+        id: docRef.id,
+        ...analysisDoc,
+      };
+      setSavedAnalyses(prev => [newSavedAnalysis, ...prev]);
+      setSelectedAnalysis(newSavedAnalysis);
+    } catch (err) {
+      console.error('Error saving analysis to Firestore:', err);
+    }
+  };
+
+  const deleteAnalysis = async (analysisId: string) => {
+    const user = firebaseAuth.currentUser;
+    if (!user) return;
+
+    try {
+      await deleteDoc(doc(firebaseDb, 'siteAnalyses', analysisId));
+      setSavedAnalyses(prev => prev.filter(a => a.id !== analysisId));
+
+      // If we deleted the selected analysis, clear results or select the next one
+      if (selectedAnalysis?.id === analysisId) {
+        const remaining = savedAnalyses.filter(a => a.id !== analysisId);
+        if (remaining.length > 0) {
+          setSelectedAnalysis(remaining[0]);
+          setResults(remaining[0].results);
+        } else {
+          setSelectedAnalysis(null);
+          setResults([]);
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting analysis:', err);
+      alert('Failed to delete analysis');
+    }
+  };
+
+  const loadAnalysis = (analysis: SavedAnalysis) => {
+    setSelectedAnalysis(analysis);
+    setResults(analysis.results);
+    setShowHistory(false);
   };
 
   // Generate default analysis structure
@@ -394,38 +540,126 @@ export function SiteAnalysis({ projectId, parcels, projectRequirements }: SiteAn
     };
   };
 
+  if (loadingHistory) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <div className="flex items-center justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+            <span className="ml-2 text-gray-500">Loading previous analyses...</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="w-5 h-5" />
-            Site Analysis
-          </CardTitle>
-          <Button
-            onClick={handleAnalyze}
-            disabled={analyzing || parcels.length === 0}
-          >
-            {analyzing ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Analyzing...
-              </>
-            ) : results.length > 0 ? (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Re-Analyze
-              </>
-            ) : (
-              <>
-                <BarChart3 className="w-4 h-4 mr-2" />
-                Analyze Parcels
-              </>
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5" />
+              Site Analysis
+            </CardTitle>
+            {selectedAnalysis && (
+              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                Last analyzed: {formatDate(selectedAnalysis.createdAt?.toDate?.() || selectedAnalysis.createdAt)}
+              </p>
             )}
-          </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            {savedAnalyses.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => setShowHistory(!showHistory)}
+              >
+                <History className="w-4 h-4 mr-2" />
+                History ({savedAnalyses.length})
+              </Button>
+            )}
+            <Button
+              onClick={handleAnalyze}
+              disabled={analyzing || parcels.length === 0}
+            >
+              {analyzing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Analyzing...
+                </>
+              ) : results.length > 0 ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Re-Analyze
+                </>
+              ) : (
+                <>
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Analyze Parcels
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
+        {/* History Panel */}
+        {showHistory && savedAnalyses.length > 0 && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+            <h3 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+              <History className="w-4 h-4" />
+              Analysis History
+            </h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {savedAnalyses.map((analysis) => {
+                const createdAt = analysis.createdAt?.toDate?.() || analysis.createdAt;
+                return (
+                  <div
+                    key={analysis.id}
+                    className={cn(
+                      'flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors',
+                      selectedAnalysis?.id === analysis.id
+                        ? 'bg-primary/10 border border-primary'
+                        : 'bg-white border hover:bg-gray-100'
+                    )}
+                    onClick={() => loadAnalysis(analysis)}
+                  >
+                    <div>
+                      <p className="font-medium text-sm">
+                        {formatDate(createdAt)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {analysis.parcelsAnalyzed} parcel(s) • Avg Score: {analysis.summary.averageScore}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1 text-xs">
+                        <span className="text-green-600">{analysis.summary.recommended} ✓</span>
+                        <span className="text-yellow-600">{analysis.summary.withCaution} !</span>
+                        <span className="text-red-600">{analysis.summary.notRecommended} ✗</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-1 h-6 w-6"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Delete this analysis report?')) {
+                            deleteAnalysis(analysis.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3 text-gray-400 hover:text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {parcels.length === 0 ? (
           <div className="text-center py-8">
             <MapPin className="w-12 h-12 mx-auto text-gray-400 mb-4" />
