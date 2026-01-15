@@ -342,8 +342,10 @@ export function DueDiligenceDashboard({ projectId }: DueDiligenceDashboardProps)
       })) as DDWorkstream[];
       // Sort client-side instead
       data.sort((a, b) => {
-        const aTime = a.createdAt?.toDate?.() || a.createdAt || 0;
-        const bTime = b.createdAt?.toDate?.() || b.createdAt || 0;
+        const aCreated = a.createdAt as any;
+        const bCreated = b.createdAt as any;
+        const aTime = aCreated?.toDate ? aCreated.toDate() : aCreated || 0;
+        const bTime = bCreated?.toDate ? bCreated.toDate() : bCreated || 0;
         return new Date(aTime).getTime() - new Date(bTime).getTime();
       });
       setWorkstreams(data);
