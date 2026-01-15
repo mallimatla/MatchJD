@@ -1,27 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { collection, addDoc } from 'firebase/firestore';
 import { firebaseDb, firebaseAuth } from '@/lib/firebase';
+import { useFormConfig, useDropdownConfig } from '@/hooks/useConfig';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function NewProjectPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    projectType: 'utility_solar',
-    state: '',
-    county: '',
-    capacityMwAc: '',
-    capacityMwDc: '',
-    estimatedCapex: '',
-    targetCod: '',
-  });
+  const [formData, setFormData] = useState<Record<string, any>>({});
+
+  // Load dynamic form configuration
+  const { visibleFields, loading: configLoading } = useFormConfig('project');
+  const { options: projectTypeOptions } = useDropdownConfig('projectType');
+
+  // Initialize form data with default values when config loads
+  useEffect(() => {
+    if (visibleFields.length > 0) {
+      const initialData: Record<string, any> = {};
+      visibleFields.forEach(field => {
+        initialData[field.name] = field.defaultValue || '';
+      });
+      setFormData(initialData);
+    }
+  }, [visibleFields]);
+
+  const handleFieldChange = (fieldName: string, value: any) => {
+    setFormData(prev => ({ ...prev, [fieldName]: value }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,13 +40,23 @@ export default function NewProjectPage() {
 
     setIsLoading(true);
     try {
+      // Process form data - convert numbers
+      const processedData: Record<string, any> = {};
+      visibleFields.forEach(field => {
+        const value = formData[field.name];
+        if (field.type === 'number' || field.type === 'currency') {
+          processedData[field.name] = parseFloat(value) || 0;
+        } else if (field.type === 'checkbox') {
+          processedData[field.name] = Boolean(value);
+        } else {
+          processedData[field.name] = value || '';
+        }
+      });
+
       const docRef = await addDoc(collection(firebaseDb, 'projects'), {
-        ...formData,
+        ...processedData,
         tenantId: user.uid,
         status: 'prospecting',
-        capacityMwAc: parseFloat(formData.capacityMwAc) || 0,
-        capacityMwDc: parseFloat(formData.capacityMwDc) || 0,
-        estimatedCapex: parseFloat(formData.estimatedCapex) || 0,
         latitude: 0,
         longitude: 0,
         createdAt: new Date(),
@@ -49,6 +69,117 @@ export default function NewProjectPage() {
       setIsLoading(false);
     }
   };
+
+  // Render a field based on its configuration
+  const renderField = (field: any) => {
+    const commonClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary";
+
+    switch (field.type) {
+      case 'textarea':
+        return (
+          <textarea
+            value={formData[field.name] || ''}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            className={commonClasses}
+            rows={3}
+            placeholder={field.placeholder}
+            required={field.required}
+          />
+        );
+
+      case 'select':
+        // Check if this is the project type field - use dropdown config
+        const options = field.name === 'type' && projectTypeOptions.length > 0
+          ? projectTypeOptions
+          : (field.options || []).map((opt: string) => ({ value: opt, label: opt }));
+
+        return (
+          <select
+            value={formData[field.name] || ''}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            className={commonClasses}
+            required={field.required}
+          >
+            <option value="">Select {field.label}</option>
+            {options.map((opt: any) => (
+              <option key={typeof opt === 'string' ? opt : opt.value} value={typeof opt === 'string' ? opt : opt.value}>
+                {typeof opt === 'string' ? opt : opt.label}
+              </option>
+            ))}
+          </select>
+        );
+
+      case 'number':
+      case 'currency':
+        return (
+          <input
+            type="number"
+            value={formData[field.name] || ''}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            className={commonClasses}
+            placeholder={field.placeholder}
+            step={field.type === 'currency' ? '0.01' : '0.1'}
+            required={field.required}
+          />
+        );
+
+      case 'date':
+        return (
+          <input
+            type="date"
+            value={formData[field.name] || ''}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            className={commonClasses}
+            required={field.required}
+          />
+        );
+
+      case 'checkbox':
+        return (
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={formData[field.name] || false}
+              onChange={(e) => handleFieldChange(field.name, e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <span className="text-sm text-gray-600">{field.helpText || field.label}</span>
+          </label>
+        );
+
+      case 'email':
+        return (
+          <input
+            type="email"
+            value={formData[field.name] || ''}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            className={commonClasses}
+            placeholder={field.placeholder}
+            required={field.required}
+          />
+        );
+
+      default: // text
+        return (
+          <input
+            type="text"
+            value={formData[field.name] || ''}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            className={commonClasses}
+            placeholder={field.placeholder}
+            required={field.required}
+          />
+        );
+    }
+  };
+
+  if (configLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -68,134 +199,19 @@ export default function NewProjectPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project Name *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Solar Farm Alpha"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  rows={3}
-                  placeholder="Brief description of the project..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project Type *
-                </label>
-                <select
-                  value={formData.projectType}
-                  onChange={(e) => setFormData({ ...formData, projectType: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  required
-                >
-                  <option value="utility_solar">Utility Solar</option>
-                  <option value="distributed_solar">Distributed Solar</option>
-                  <option value="storage">Storage</option>
-                  <option value="hybrid">Hybrid</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.state}
-                    onChange={(e) => setFormData({ ...formData, state: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="TX"
-                    maxLength={2}
-                    required
-                  />
+              {visibleFields.map((field) => (
+                <div key={field.id}>
+                  {field.type !== 'checkbox' && (
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {field.label} {field.required && '*'}
+                    </label>
+                  )}
+                  {renderField(field)}
+                  {field.helpText && field.type !== 'checkbox' && (
+                    <p className="text-xs text-gray-500 mt-1">{field.helpText}</p>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    County *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.county}
-                    onChange={(e) => setFormData({ ...formData, county: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Travis"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Capacity (MW AC)
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.capacityMwAc}
-                    onChange={(e) => setFormData({ ...formData, capacityMwAc: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="100"
-                    step="0.1"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Capacity (MW DC)
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.capacityMwDc}
-                    onChange={(e) => setFormData({ ...formData, capacityMwDc: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="130"
-                    step="0.1"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Estimated CAPEX ($)
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.estimatedCapex}
-                    onChange={(e) => setFormData({ ...formData, estimatedCapex: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="50000000"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Target COD
-                  </label>
-                  <input
-                    type="month"
-                    value={formData.targetCod}
-                    onChange={(e) => setFormData({ ...formData, targetCod: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-              </div>
+              ))}
 
               <div className="flex gap-4 pt-4">
                 <Button
