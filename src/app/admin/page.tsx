@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { WorkflowBuilder } from '@/components/admin/WorkflowBuilder';
 
 // Permanent admin email - this user cannot be removed from admin list
 const PERMANENT_ADMIN = 'mallimatla@gmail.com';
@@ -92,6 +93,11 @@ interface WorkflowConfig {
   name: string;
   enabled: boolean;
   description: string;
+  version: number;
+  nodes: any[];
+  connections: any[];
+  variables: any[];
+  triggers: any[];
   steps: {
     id: string;
     name: string;
@@ -100,6 +106,8 @@ interface WorkflowConfig {
     requiresHitl: boolean;
     enabled: boolean;
   }[];
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 interface DDTemplate {
@@ -276,6 +284,25 @@ const DEFAULT_WORKFLOWS: WorkflowConfig[] = [
     name: 'Document Processing',
     enabled: true,
     description: 'AI-powered document extraction and classification',
+    version: 1,
+    nodes: [
+      { id: 'trigger_1', type: 'trigger_document_upload', name: 'Document Upload', description: 'When document is uploaded', position: { x: 50, y: 100 }, config: {}, inputs: [], outputs: ['output'] },
+      { id: 'ai_1', type: 'ai_classifier', name: 'Document Classifier', description: 'AI classifies document type', position: { x: 300, y: 100 }, config: { model: 'claude-3-sonnet', categories: ['lease', 'ppa', 'easement', 'title_report'], confidenceThreshold: 0.8 }, inputs: ['input'], outputs: ['output'] },
+      { id: 'ai_2', type: 'ai_extractor', name: 'Data Extractor', description: 'Extract structured data', position: { x: 550, y: 100 }, config: { model: 'claude-3-sonnet', validateOutput: true }, inputs: ['input'], outputs: ['output'] },
+      { id: 'cond_1', type: 'condition', name: 'Check Confidence', description: 'If confidence >= 90%', position: { x: 800, y: 100 }, config: { conditions: [{ field: 'confidence', operator: 'greater', value: '0.9' }] }, inputs: ['input'], outputs: ['true', 'false'] },
+      { id: 'hitl_1', type: 'hitl_gate', name: 'Human Review', description: 'Manual review required', position: { x: 1050, y: 180 }, config: { reviewType: 'approval', urgency: 'medium' }, inputs: ['input'], outputs: ['output'] },
+      { id: 'end_1', type: 'end_success', name: 'Complete', description: 'Processing complete', position: { x: 1300, y: 100 }, config: {}, inputs: ['input'], outputs: [] },
+    ],
+    connections: [
+      { id: 'c1', sourceNodeId: 'trigger_1', sourceOutput: 'output', targetNodeId: 'ai_1', targetInput: 'input' },
+      { id: 'c2', sourceNodeId: 'ai_1', sourceOutput: 'output', targetNodeId: 'ai_2', targetInput: 'input' },
+      { id: 'c3', sourceNodeId: 'ai_2', sourceOutput: 'output', targetNodeId: 'cond_1', targetInput: 'input' },
+      { id: 'c4', sourceNodeId: 'cond_1', sourceOutput: 'true', targetNodeId: 'end_1', targetInput: 'input' },
+      { id: 'c5', sourceNodeId: 'cond_1', sourceOutput: 'false', targetNodeId: 'hitl_1', targetInput: 'input' },
+      { id: 'c6', sourceNodeId: 'hitl_1', sourceOutput: 'output', targetNodeId: 'end_1', targetInput: 'input' },
+    ],
+    variables: [],
+    triggers: [{ id: 't1', type: 'event', config: { eventType: 'document.created' }, enabled: true }],
     steps: [
       { id: 'classify', name: 'classify', label: 'Classification', description: 'AI classifies document type', requiresHitl: false, enabled: true },
       { id: 'extract', name: 'extract', label: 'Data Extraction', description: 'Extract structured data', requiresHitl: false, enabled: true },
@@ -289,6 +316,28 @@ const DEFAULT_WORKFLOWS: WorkflowConfig[] = [
     name: 'Land Acquisition',
     enabled: true,
     description: 'Complete land acquisition workflow from analysis to lease',
+    version: 1,
+    nodes: [
+      { id: 'trigger_1', type: 'trigger_manual', name: 'Start Acquisition', description: 'Manually triggered', position: { x: 50, y: 100 }, config: {}, inputs: [], outputs: ['output'] },
+      { id: 'ai_1', type: 'ai_analyzer', name: 'Site Analysis', description: 'AI analyzes site suitability', position: { x: 300, y: 100 }, config: { analysisType: 'site_suitability' }, inputs: ['input'], outputs: ['output'] },
+      { id: 'cond_1', type: 'condition', name: 'Site Suitable?', description: 'Check suitability score', position: { x: 550, y: 100 }, config: { conditions: [{ field: 'score', operator: 'greater', value: '70' }] }, inputs: ['input'], outputs: ['true', 'false'] },
+      { id: 'action_1', type: 'action_create_record', name: 'Create DD', description: 'Initialize due diligence', position: { x: 800, y: 50 }, config: { collection: 'ddWorkstreams' }, inputs: ['input'], outputs: ['output'] },
+      { id: 'ai_2', type: 'ai_custom', name: 'Lease Terms', description: 'AI recommends lease terms', position: { x: 1050, y: 50 }, config: { systemPrompt: 'You are a solar land lease expert.' }, inputs: ['input'], outputs: ['output'] },
+      { id: 'hitl_1', type: 'hitl_gate', name: 'Legal Review', description: 'Attorney review required', position: { x: 1300, y: 50 }, config: { reviewType: 'edit', urgency: 'high' }, inputs: ['input'], outputs: ['output'] },
+      { id: 'end_1', type: 'end_success', name: 'Lease Executed', description: 'Acquisition complete', position: { x: 1550, y: 50 }, config: {}, inputs: ['input'], outputs: [] },
+      { id: 'end_2', type: 'end_failure', name: 'Not Suitable', description: 'Site not suitable', position: { x: 800, y: 200 }, config: {}, inputs: ['input'], outputs: [] },
+    ],
+    connections: [
+      { id: 'c1', sourceNodeId: 'trigger_1', sourceOutput: 'output', targetNodeId: 'ai_1', targetInput: 'input' },
+      { id: 'c2', sourceNodeId: 'ai_1', sourceOutput: 'output', targetNodeId: 'cond_1', targetInput: 'input' },
+      { id: 'c3', sourceNodeId: 'cond_1', sourceOutput: 'true', targetNodeId: 'action_1', targetInput: 'input' },
+      { id: 'c4', sourceNodeId: 'cond_1', sourceOutput: 'false', targetNodeId: 'end_2', targetInput: 'input' },
+      { id: 'c5', sourceNodeId: 'action_1', sourceOutput: 'output', targetNodeId: 'ai_2', targetInput: 'input' },
+      { id: 'c6', sourceNodeId: 'ai_2', sourceOutput: 'output', targetNodeId: 'hitl_1', targetInput: 'input' },
+      { id: 'c7', sourceNodeId: 'hitl_1', sourceOutput: 'output', targetNodeId: 'end_1', targetInput: 'input' },
+    ],
+    variables: [],
+    triggers: [],
     steps: [
       { id: 'site_analysis', name: 'site_analysis', label: 'Site Analysis', description: 'AI analyzes site suitability', requiresHitl: false, enabled: true },
       { id: 'due_diligence', name: 'due_diligence', label: 'Due Diligence', description: 'Initialize DD workstreams', requiresHitl: false, enabled: true },
@@ -302,6 +351,22 @@ const DEFAULT_WORKFLOWS: WorkflowConfig[] = [
     name: 'Project Lifecycle',
     enabled: true,
     description: 'Manage project through development milestones',
+    version: 1,
+    nodes: [
+      { id: 'trigger_1', type: 'trigger_event', name: 'Project Created', description: 'When project is created', position: { x: 50, y: 100 }, config: { eventType: 'project.created' }, inputs: [], outputs: ['output'] },
+      { id: 'action_1', type: 'action_send_notification', name: 'Welcome', description: 'Send welcome notification', position: { x: 300, y: 100 }, config: { title: 'Project Started', type: 'info' }, inputs: ['input'], outputs: ['output'] },
+      { id: 'delay_1', type: 'delay', name: 'Wait 1 Day', description: 'Wait for initial setup', position: { x: 550, y: 100 }, config: { duration: 1, unit: 'days' }, inputs: ['input'], outputs: ['output'] },
+      { id: 'action_2', type: 'action_send_notification', name: 'Reminder', description: 'Add parcels reminder', position: { x: 800, y: 100 }, config: { title: 'Add Parcels', message: 'Add parcels to continue', type: 'warning' }, inputs: ['input'], outputs: ['output'] },
+      { id: 'end_1', type: 'end_success', name: 'Complete', description: 'Lifecycle started', position: { x: 1050, y: 100 }, config: {}, inputs: ['input'], outputs: [] },
+    ],
+    connections: [
+      { id: 'c1', sourceNodeId: 'trigger_1', sourceOutput: 'output', targetNodeId: 'action_1', targetInput: 'input' },
+      { id: 'c2', sourceNodeId: 'action_1', sourceOutput: 'output', targetNodeId: 'delay_1', targetInput: 'input' },
+      { id: 'c3', sourceNodeId: 'delay_1', sourceOutput: 'output', targetNodeId: 'action_2', targetInput: 'input' },
+      { id: 'c4', sourceNodeId: 'action_2', sourceOutput: 'output', targetNodeId: 'end_1', targetInput: 'input' },
+    ],
+    variables: [],
+    triggers: [{ id: 't1', type: 'event', config: { eventType: 'project.created' }, enabled: true }],
     steps: [
       { id: 'prospecting', name: 'prospecting', label: 'Prospecting', description: 'Initial site identification', requiresHitl: false, enabled: true },
       { id: 'site_control', name: 'site_control', label: 'Site Control', description: 'Secure land rights', requiresHitl: false, enabled: true },
@@ -478,6 +543,7 @@ export default function AdminPage() {
   // UI states
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [editingField, setEditingField] = useState<string | null>(null);
+  const [editingWorkflowId, setEditingWorkflowId] = useState<string | null>(null);
 
   // Check if user is admin - permanent admin OR in adminEmails list from Firestore
   useEffect(() => {
@@ -1211,100 +1277,175 @@ export default function AdminPage() {
                 {/* Workflows Section */}
                 {activeSection === 'workflows' && (
                   <div className="space-y-6">
-                    {workflowConfigs.map((workflow) => (
-                      <div key={workflow.id} className="border rounded-lg">
-                        <div className="flex items-center justify-between p-4">
-                          <button
-                            onClick={() => toggleExpand(workflow.id)}
-                            className="flex-1 flex items-center gap-3 text-left"
+                    {editingWorkflowId ? (
+                      // Workflow Builder View
+                      <div>
+                        <div className="flex items-center gap-2 mb-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditingWorkflowId(null)}
                           >
-                            <div>
-                              <h3 className="font-medium">{workflow.name}</h3>
-                              <p className="text-sm text-gray-500">{workflow.description}</p>
-                            </div>
-                          </button>
-                          <div className="flex items-center gap-3">
-                            <label className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={workflow.enabled}
-                                onChange={(e) => {
-                                  setWorkflowConfigs((configs) =>
-                                    configs.map((w) =>
-                                      w.id === workflow.id
-                                        ? { ...w, enabled: e.target.checked }
-                                        : w
-                                    )
-                                  );
-                                }}
-                                className="w-4 h-4"
-                              />
-                              <span className="text-sm font-medium">Enabled</span>
-                            </label>
-                            <Badge variant={workflow.enabled ? 'success' : 'secondary'}>
-                              {workflow.enabled ? 'Active' : 'Disabled'}
-                            </Badge>
-                            {expandedItems.has(workflow.id) ? (
-                              <ChevronDown className="w-5 h-5" />
-                            ) : (
-                              <ChevronRight className="w-5 h-5" />
-                            )}
-                          </div>
+                            <ChevronRight className="w-4 h-4 mr-1 rotate-180" />
+                            Back to List
+                          </Button>
                         </div>
-
-                        {expandedItems.has(workflow.id) && (
-                          <div className="border-t p-4 space-y-3">
-                            {workflow.steps.map((step, index) => (
-                              <div
-                                key={step.id}
-                                className={cn(
-                                  'flex items-center gap-4 p-3 rounded-lg',
-                                  step.enabled ? 'bg-gray-50' : 'bg-gray-100 opacity-60'
-                                )}
-                              >
-                                <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-medium">
-                                  {index + 1}
-                                </div>
-
-                                <div className="flex-1">
-                                  <div className="font-medium">{step.label}</div>
-                                  <div className="text-sm text-gray-500">{step.description}</div>
-                                </div>
-
-                                <div className="flex items-center gap-4">
-                                  {step.requiresHitl && (
-                                    <Badge variant="warning">HITL Gate</Badge>
-                                  )}
-                                  <label className="flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={step.enabled}
-                                      onChange={(e) => {
-                                        setWorkflowConfigs((configs) =>
-                                          configs.map((w) =>
-                                            w.id === workflow.id
-                                              ? {
-                                                  ...w,
-                                                  steps: w.steps.map((s) =>
-                                                    s.id === step.id
-                                                      ? { ...s, enabled: e.target.checked }
-                                                      : s
-                                                  ),
-                                                }
-                                              : w
-                                          )
-                                        );
-                                      }}
-                                    />
-                                    <span className="text-sm">Enabled</span>
-                                  </label>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                        {workflowConfigs.find(w => w.id === editingWorkflowId) && (
+                          <WorkflowBuilder
+                            workflow={workflowConfigs.find(w => w.id === editingWorkflowId) as any}
+                            onChange={(updatedWorkflow) => {
+                              setWorkflowConfigs(configs =>
+                                configs.map(w =>
+                                  w.id === editingWorkflowId
+                                    ? { ...w, ...updatedWorkflow, updatedAt: new Date() }
+                                    : w
+                                )
+                              );
+                            }}
+                            onSave={handleSave}
+                            saving={saving}
+                          />
                         )}
                       </div>
-                    ))}
+                    ) : (
+                      // Workflow List View
+                      <>
+                        <div className="flex items-center justify-between mb-4">
+                          <p className="text-sm text-gray-500">
+                            Create and configure AI-powered workflows with visual builder
+                          </p>
+                          <Button
+                            onClick={() => {
+                              const newWorkflow: WorkflowConfig = {
+                                id: `workflow_${Date.now()}`,
+                                name: 'New Workflow',
+                                description: 'Custom workflow',
+                                enabled: false,
+                                version: 1,
+                                nodes: [],
+                                connections: [],
+                                variables: [],
+                                triggers: [],
+                                steps: [],
+                                createdAt: new Date(),
+                              };
+                              setWorkflowConfigs([...workflowConfigs, newWorkflow]);
+                              setEditingWorkflowId(newWorkflow.id);
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            New Workflow
+                          </Button>
+                        </div>
+
+                        {workflowConfigs.map((workflow) => (
+                          <div key={workflow.id} className="border rounded-lg hover:shadow-md transition-shadow">
+                            <div className="flex items-center justify-between p-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3">
+                                  <h3 className="font-medium text-lg">{workflow.name}</h3>
+                                  <Badge variant={workflow.enabled ? 'success' : 'secondary'}>
+                                    {workflow.enabled ? 'Active' : 'Draft'}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-gray-500 mt-1">{workflow.description}</p>
+                                <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                                  <span>{workflow.nodes?.length || 0} nodes</span>
+                                  <span>{workflow.connections?.length || 0} connections</span>
+                                  {workflow.triggers?.length > 0 && (
+                                    <span className="text-green-600">
+                                      {workflow.triggers.filter((t: any) => t.enabled).length} active trigger(s)
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-2 mr-4">
+                                  <input
+                                    type="checkbox"
+                                    checked={workflow.enabled}
+                                    onChange={(e) => {
+                                      setWorkflowConfigs((configs) =>
+                                        configs.map((w) =>
+                                          w.id === workflow.id
+                                            ? { ...w, enabled: e.target.checked }
+                                            : w
+                                        )
+                                      );
+                                    }}
+                                    className="w-4 h-4"
+                                  />
+                                  <span className="text-sm">Enabled</span>
+                                </label>
+
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEditingWorkflowId(workflow.id)}
+                                >
+                                  <Edit2 className="w-4 h-4 mr-1" />
+                                  Edit
+                                </Button>
+
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const duplicated = {
+                                      ...workflow,
+                                      id: `workflow_${Date.now()}`,
+                                      name: `${workflow.name} (Copy)`,
+                                      enabled: false,
+                                    };
+                                    setWorkflowConfigs([...workflowConfigs, duplicated]);
+                                  }}
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </Button>
+
+                                {!['document_processing', 'land_acquisition', 'project_lifecycle'].includes(workflow.id) && (
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (confirm('Delete this workflow?')) {
+                                        setWorkflowConfigs(configs => configs.filter(w => w.id !== workflow.id));
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+
+                                <ChevronRight className="w-5 h-5 text-gray-400" />
+                              </div>
+                            </div>
+
+                            {/* Quick preview of workflow nodes */}
+                            {workflow.nodes && workflow.nodes.length > 0 && (
+                              <div className="border-t px-4 py-3 bg-gray-50">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {workflow.nodes.slice(0, 6).map((node: any, i: number) => (
+                                    <span key={node.id} className="flex items-center gap-1">
+                                      {i > 0 && <span className="text-gray-400">→</span>}
+                                      <Badge variant="outline" className="text-xs">
+                                        {node.name}
+                                      </Badge>
+                                    </span>
+                                  ))}
+                                  {workflow.nodes.length > 6 && (
+                                    <span className="text-xs text-gray-400">
+                                      +{workflow.nodes.length - 6} more
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </>
+                    )}
                   </div>
                 )}
 
