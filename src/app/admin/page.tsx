@@ -24,17 +24,18 @@ import {
   X,
   GripVertical,
   Copy,
+  AlertCircle,
 } from 'lucide-react';
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { firebaseDb } from '@/lib/firebase';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-// Admin credentials (in production, use environment variables or secure storage)
-const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'neurogrid2024';
+// Admin emails - users with these emails can access admin (add your admin emails here)
+const ADMIN_EMAILS = ['admin@example.com', 'admin@neurogrid.com'];
 
 type AdminSection = 'forms' | 'documents' | 'dropdowns' | 'workflows' | 'dd-templates' | 'system';
 
@@ -402,23 +403,33 @@ const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   },
 };
 
-// Login Component
-function AdminLogin({ onLogin }: { onLogin: () => void }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
+// Not Authorized Component
+function NotAuthorized({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-white" />
+          </div>
+          <CardTitle className="text-2xl">Access Denied</CardTitle>
+          <p className="text-gray-500 mt-2">
+            You don&apos;t have permission to access the admin portal.
+            Contact your administrator to request access.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={onBack} className="w-full">
+            Back to Dashboard
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      localStorage.setItem('adminAuth', 'true');
-      onLogin();
-    } else {
-      setError('Invalid credentials');
-    }
-  };
-
+// Login Required Component
+function LoginRequired({ onLogin }: { onLogin: () => void }) {
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -427,49 +438,15 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
             <Shield className="w-8 h-8 text-white" />
           </div>
           <CardTitle className="text-2xl">Admin Portal</CardTitle>
-          <p className="text-gray-500 mt-2">Enter your credentials to access the admin panel</p>
+          <p className="text-gray-500 mt-2">
+            Please log in to your account to access the admin portal.
+          </p>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                {error}
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                placeholder="Enter username"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent pr-10"
-                  placeholder="Enter password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-            <Button type="submit" className="w-full">
-              <Lock className="w-4 h-4 mr-2" />
-              Login
-            </Button>
-          </form>
+          <Button onClick={onLogin} className="w-full">
+            <Lock className="w-4 h-4 mr-2" />
+            Go to Login
+          </Button>
         </CardContent>
       </Card>
     </div>
@@ -479,9 +456,10 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
 // Main Admin Page
 export default function AdminPage() {
   const router = useRouter();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { user, loading: authLoading, signOut } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminCheckComplete, setAdminCheckComplete] = useState(false);
   const [activeSection, setActiveSection] = useState<AdminSection>('forms');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
@@ -497,18 +475,41 @@ export default function AdminPage() {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [editingField, setEditingField] = useState<string | null>(null);
 
-  // Check authentication on mount
+  // Check if user is admin
   useEffect(() => {
-    const auth = localStorage.getItem('adminAuth');
-    if (auth === 'true') {
-      setIsAuthenticated(true);
+    const checkAdmin = async () => {
+      if (!user) {
+        setAdminCheckComplete(true);
+        return;
+      }
+
+      try {
+        // Check if user email is in admin list
+        const emailIsAdmin = ADMIN_EMAILS.includes(user.email || '');
+
+        // Also check user document for admin role
+        const userDoc = await getDoc(doc(firebaseDb, 'users', user.uid));
+        const roleIsAdmin = userDoc.exists() && userDoc.data()?.role === 'admin';
+
+        // User is admin if email matches OR has admin role in Firestore
+        setIsAdmin(emailIsAdmin || roleIsAdmin);
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        // If we can't check, allow access if email matches admin list
+        setIsAdmin(ADMIN_EMAILS.includes(user.email || ''));
+      }
+
+      setAdminCheckComplete(true);
+    };
+
+    if (!authLoading) {
+      checkAdmin();
     }
-    setLoading(false);
-  }, []);
+  }, [user, authLoading]);
 
   // Load configurations from Firestore
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!user || !isAdmin) return;
 
     const loadConfigs = async () => {
       try {
@@ -553,11 +554,11 @@ export default function AdminPage() {
     };
 
     loadConfigs();
-  }, [isAuthenticated]);
+  }, [user, isAdmin]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('adminAuth');
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    await signOut();
+    router.push('/login');
   };
 
   const handleSave = async () => {
@@ -682,7 +683,7 @@ export default function AdminPage() {
     );
   };
 
-  if (loading) {
+  if (authLoading || !adminCheckComplete) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -690,8 +691,12 @@ export default function AdminPage() {
     );
   }
 
-  if (!isAuthenticated) {
-    return <AdminLogin onLogin={() => setIsAuthenticated(true)} />;
+  if (!user) {
+    return <LoginRequired onLogin={() => router.push('/login')} />;
+  }
+
+  if (!isAdmin) {
+    return <NotAuthorized onBack={() => router.push('/dashboard')} />;
   }
 
   const sections = [
