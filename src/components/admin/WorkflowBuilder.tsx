@@ -435,23 +435,50 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
     const targetNode = workflow.nodes.find(n => n.id === conn.targetNodeId);
     if (!sourceNode || !targetNode) return null;
 
-    const sx = sourceNode.position.x + 200; // Right side of node
+    const sx = sourceNode.position.x + 220 + 3; // Right side of node + port offset
     const sy = sourceNode.position.y + 40;
-    const tx = targetNode.position.x; // Left side of node
+    const tx = targetNode.position.x - 3; // Left side of node - port offset
     const ty = targetNode.position.y + 40;
 
     const midX = (sx + tx) / 2;
+    const curveOffset = Math.min(Math.abs(tx - sx) / 2, 80);
 
     return (
       <g key={conn.id} className="cursor-pointer group" onClick={() => deleteConnection(conn.id)}>
+        {/* Wider invisible path for easier clicking */}
         <path
-          d={`M ${sx} ${sy} C ${midX} ${sy}, ${midX} ${ty}, ${tx} ${ty}`}
+          d={`M ${sx} ${sy} C ${sx + curveOffset} ${sy}, ${tx - curveOffset} ${ty}, ${tx} ${ty}`}
+          stroke="transparent"
+          strokeWidth="12"
+          fill="none"
+        />
+        {/* Visible path */}
+        <path
+          d={`M ${sx} ${sy} C ${sx + curveOffset} ${sy}, ${tx - curveOffset} ${ty}, ${tx} ${ty}`}
           stroke="#94a3b8"
           strokeWidth="2"
           fill="none"
           className="group-hover:stroke-red-500 transition-colors"
+          markerEnd="url(#arrowhead)"
         />
-        <circle cx={tx} cy={ty} r="4" fill="#94a3b8" className="group-hover:fill-red-500" />
+        {/* Delete indicator on hover */}
+        <circle
+          cx={(sx + tx) / 2}
+          cy={(sy + ty) / 2}
+          r="8"
+          fill="white"
+          stroke="#94a3b8"
+          strokeWidth="2"
+          className="opacity-0 group-hover:opacity-100 group-hover:fill-red-100 group-hover:stroke-red-500 transition-all"
+        />
+        <text
+          x={(sx + tx) / 2}
+          y={(sy + ty) / 2 + 4}
+          textAnchor="middle"
+          className="text-xs fill-red-500 opacity-0 group-hover:opacity-100 transition-all pointer-events-none"
+        >
+          ×
+        </text>
       </g>
     );
   };
@@ -463,12 +490,14 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
 
     const Icon = nodeDef.icon;
     const isSelected = selectedNodeId === node.id;
+    const isConnectingTarget = connectingFrom && connectingFrom.nodeId !== node.id && node.inputs.length > 0;
 
     return (
       <div
         className={cn(
-          'absolute bg-white border-2 rounded-lg shadow-lg w-[200px] cursor-move transition-all',
-          isSelected ? 'border-primary ring-2 ring-primary/20' : 'border-gray-200 hover:border-gray-300'
+          'absolute bg-white border-2 rounded-lg shadow-lg w-[220px] cursor-move transition-all',
+          isSelected ? 'border-primary ring-2 ring-primary/20' : 'border-gray-200 hover:border-gray-300',
+          isConnectingTarget && 'ring-2 ring-blue-300 border-blue-400'
         )}
         style={{
           left: node.position.x,
@@ -486,7 +515,7 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
           if (!rect) return;
           updateNode(node.id, {
             position: {
-              x: (e.clientX - rect.left - pan.x) / zoom - 100,
+              x: (e.clientX - rect.left - pan.x) / zoom - 110,
               y: (e.clientY - rect.top - pan.y) / zoom - 40,
             },
           });
@@ -494,19 +523,22 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
       >
         {/* Node Header */}
         <div className={cn('px-3 py-2 rounded-t-md flex items-center gap-2', nodeDef.categoryColor)}>
-          <Icon className="w-4 h-4 text-white" />
+          <Icon className="w-4 h-4 text-white flex-shrink-0" />
           <span className="text-white text-sm font-medium truncate">{node.name}</span>
         </div>
 
         {/* Node Body */}
         <div className="px-3 py-2">
-          <p className="text-xs text-gray-500 truncate">{node.description}</p>
+          <p className="text-xs text-gray-500 line-clamp-2">{node.description}</p>
         </div>
 
-        {/* Input Port */}
+        {/* Input Port - left side */}
         {node.inputs.length > 0 && (
           <div
-            className="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-300 rounded-full border-2 border-white cursor-crosshair hover:bg-primary"
+            className={cn(
+              'absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 border-white cursor-pointer transition-all flex items-center justify-center shadow-sm',
+              connectingFrom ? 'bg-blue-500 hover:bg-blue-600 scale-110' : 'bg-gray-400 hover:bg-primary'
+            )}
             onClick={(e) => {
               e.stopPropagation();
               if (connectingFrom) {
@@ -514,46 +546,74 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
                 setConnectingFrom(null);
               }
             }}
-          />
-        )}
-
-        {/* Output Ports */}
-        {node.outputs.map((output, i) => (
-          <div
-            key={output}
-            className="absolute -right-2 w-4 h-4 bg-gray-300 rounded-full border-2 border-white cursor-crosshair hover:bg-primary"
-            style={{ top: `${30 + i * 20}%` }}
-            onClick={(e) => {
-              e.stopPropagation();
-              setConnectingFrom({ nodeId: node.id, output });
-            }}
+            title={connectingFrom ? 'Click to connect here' : 'Input port'}
           >
-            {node.outputs.length > 1 && (
-              <span className="absolute -right-8 text-xs text-gray-500 whitespace-nowrap">
-                {output}
-              </span>
+            {connectingFrom && (
+              <ChevronRight className="w-3 h-3 text-white" />
             )}
           </div>
-        ))}
+        )}
+
+        {/* Output Ports - right side */}
+        {node.outputs.map((output, i) => {
+          const topPercent = node.outputs.length === 1 ? 50 : 30 + (i * 40 / Math.max(1, node.outputs.length - 1));
+          return (
+            <div
+              key={output}
+              className={cn(
+                'absolute -right-3 w-6 h-6 rounded-full border-2 border-white cursor-pointer transition-all flex items-center justify-center shadow-sm',
+                connectingFrom?.nodeId === node.id && connectingFrom?.output === output
+                  ? 'bg-green-500 ring-2 ring-green-300 scale-110'
+                  : 'bg-gray-400 hover:bg-green-500'
+              )}
+              style={{ top: `${topPercent}%`, transform: 'translateY(-50%)' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setConnectingFrom({ nodeId: node.id, output });
+              }}
+              title={`Click to connect from "${output}"`}
+            >
+              <ChevronRight className="w-3 h-3 text-white" />
+            </div>
+          );
+        })}
+
+        {/* Output labels for multi-output nodes */}
+        {node.outputs.length > 1 && (
+          <div className="absolute -right-16 top-0 bottom-0 flex flex-col justify-center">
+            {node.outputs.map((output, i) => {
+              const topPercent = 30 + (i * 40 / Math.max(1, node.outputs.length - 1));
+              return (
+                <span
+                  key={output}
+                  className="text-xs text-gray-500 whitespace-nowrap absolute"
+                  style={{ top: `${topPercent}%`, transform: 'translateY(-50%)', right: 0 }}
+                >
+                  {output}
+                </span>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="flex h-[700px] border rounded-lg overflow-hidden bg-gray-50">
+    <div className="flex h-[calc(100vh-200px)] min-h-[600px] border rounded-lg overflow-hidden bg-gray-50">
       {/* Left Sidebar - Node Palette */}
-      <div className="w-64 bg-white border-r overflow-y-auto">
-        <div className="p-3 border-b sticky top-0 bg-white z-10">
-          <h3 className="font-semibold text-gray-900">Nodes</h3>
-          <p className="text-xs text-gray-500">Drag nodes to canvas</p>
+      <div className="w-72 bg-white border-r overflow-y-auto flex-shrink-0">
+        <div className="p-4 border-b sticky top-0 bg-white z-10">
+          <h3 className="font-semibold text-gray-900">Node Palette</h3>
+          <p className="text-xs text-gray-500 mt-1">Drag nodes to canvas to add them</p>
         </div>
 
-        <div className="p-2">
+        <div className="p-3">
           {Object.entries(NODE_CATEGORIES).map(([key, category]) => (
-            <div key={key} className="mb-2">
+            <div key={key} className="mb-3">
               <button
                 onClick={() => toggleCategory(key)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100"
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
               >
                 {expandedCategories.has(key) ? (
                   <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -561,11 +621,12 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
                   <ChevronRight className="w-4 h-4 text-gray-400" />
                 )}
                 <div className={cn('w-3 h-3 rounded', category.color)} />
-                <span className="text-sm font-medium">{category.label}</span>
+                <span className="text-sm font-medium flex-1 text-left">{category.label}</span>
+                <span className="text-xs text-gray-400">{category.nodes.length}</span>
               </button>
 
               {expandedCategories.has(key) && (
-                <div className="ml-4 mt-1 space-y-1">
+                <div className="mt-2 space-y-1 pl-2">
                   {category.nodes.map((node) => {
                     const Icon = node.icon;
                     return (
@@ -574,12 +635,14 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
                         draggable
                         onDragStart={() => setDraggedNodeType(node.type as NodeType)}
                         onDragEnd={() => setDraggedNodeType(null)}
-                        className="flex items-center gap-2 px-2 py-1.5 rounded cursor-grab hover:bg-gray-100 active:cursor-grabbing"
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-grab hover:bg-gray-100 active:cursor-grabbing border border-transparent hover:border-gray-200 transition-all"
                       >
-                        <Icon className="w-4 h-4 text-gray-500" />
+                        <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0', category.color)}>
+                          <Icon className="w-4 h-4 text-white" />
+                        </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm truncate">{node.name}</p>
-                          <p className="text-xs text-gray-400 truncate">{node.description}</p>
+                          <p className="text-sm font-medium">{node.name}</p>
+                          <p className="text-xs text-gray-500">{node.description}</p>
                         </div>
                       </div>
                     );
@@ -595,7 +658,7 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
       <div className="flex-1 flex flex-col">
         {/* Canvas Toolbar */}
         <div className="flex items-center justify-between px-4 py-2 border-b bg-white">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <input
               type="text"
               value={workflow.name}
@@ -608,17 +671,30 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
             </Badge>
           </div>
           <div className="flex items-center gap-2">
+            {/* Connection Mode Indicator */}
+            {connectingFrom && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm animate-pulse">
+                <ArrowRight className="w-4 h-4" />
+                <span>Click target node to connect</span>
+                <button
+                  onClick={() => setConnectingFrom(null)}
+                  className="ml-1 p-0.5 hover:bg-blue-200 rounded"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
             <div className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1">
               <button
                 onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}
-                className="text-gray-600 hover:text-gray-900"
+                className="text-gray-600 hover:text-gray-900 px-1"
               >
                 -
               </button>
               <span className="text-sm w-12 text-center">{Math.round(zoom * 100)}%</span>
               <button
                 onClick={() => setZoom(Math.min(1.5, zoom + 0.1))}
-                className="text-gray-600 hover:text-gray-900"
+                className="text-gray-600 hover:text-gray-900 px-1"
               >
                 +
               </button>
@@ -658,6 +734,18 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
             className="absolute inset-0 w-full h-full pointer-events-none"
             style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}
           >
+            <defs>
+              <marker
+                id="arrowhead"
+                markerWidth="10"
+                markerHeight="7"
+                refX="9"
+                refY="3.5"
+                orient="auto"
+              >
+                <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+              </marker>
+            </defs>
             {workflow.connections.map(renderConnection)}
           </svg>
 
@@ -671,10 +759,27 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
           {/* Empty state */}
           {workflow.nodes.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="text-center">
+              <div className="text-center max-w-md">
                 <Workflow className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-500">Start Building Your Workflow</h3>
                 <p className="text-gray-400 mt-1">Drag nodes from the left panel to get started</p>
+                <div className="mt-6 p-4 bg-white rounded-lg shadow-sm border text-left">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">How to connect nodes:</h4>
+                  <ol className="text-xs text-gray-500 space-y-1">
+                    <li>1. Click the <span className="inline-block w-3 h-3 bg-gray-300 rounded-full align-middle mx-1"></span> output port (right side) of source node</li>
+                    <li>2. Then click the <span className="inline-block w-3 h-3 bg-gray-300 rounded-full align-middle mx-1"></span> input port (left side) of target node</li>
+                    <li>3. Click on a line to delete the connection</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Instructions when nodes exist but no connections */}
+          {workflow.nodes.length > 0 && workflow.connections.length === 0 && !connectingFrom && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
+              <div className="px-4 py-2 bg-blue-600 text-white text-sm rounded-full shadow-lg">
+                Click the right port of a node to start connecting
               </div>
             </div>
           )}
@@ -683,43 +788,109 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
 
       {/* Right Sidebar - Node Config */}
       {selectedNode && (
-        <div className="w-80 bg-white border-l overflow-y-auto">
+        <div className="w-96 bg-white border-l overflow-y-auto flex-shrink-0">
           <div className="p-4 border-b sticky top-0 bg-white z-10">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Node Settings</h3>
+              <div>
+                <h3 className="font-semibold text-gray-900">Node Configuration</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Configure node settings and behavior</p>
+              </div>
               <button
                 onClick={() => setSelectedNodeId(null)}
-                className="p-1 hover:bg-gray-100 rounded"
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          <div className="p-4 space-y-4">
-            {/* Basic Info */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-              <input
-                type="text"
-                value={selectedNode.name}
-                onChange={(e) => updateNode(selectedNode.id, { name: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-              />
+          <div className="p-4 space-y-5">
+            {/* Node Type Badge */}
+            <div className="flex items-center gap-2">
+              {(() => {
+                const nodeDef = getNodeDef(selectedNode.type);
+                if (!nodeDef) return null;
+                const Icon = nodeDef.icon;
+                return (
+                  <div className={cn('px-3 py-1.5 rounded-lg flex items-center gap-2', nodeDef.categoryColor)}>
+                    <Icon className="w-4 h-4 text-white" />
+                    <span className="text-white text-sm font-medium">{selectedNode.type.replace(/_/g, ' ')}</span>
+                  </div>
+                );
+              })()}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <textarea
-                value={selectedNode.description}
-                onChange={(e) => updateNode(selectedNode.id, { description: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-                rows={2}
-              />
+            {/* Basic Info */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Display Name</label>
+                <input
+                  type="text"
+                  value={selectedNode.name}
+                  onChange={(e) => updateNode(selectedNode.id, { name: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+                <textarea
+                  value={selectedNode.description}
+                  onChange={(e) => updateNode(selectedNode.id, { description: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+                  rows={2}
+                />
+              </div>
             </div>
 
             {/* Type-specific config */}
-            {renderNodeConfig(selectedNode, updateNodeConfig)}
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-medium text-gray-900 mb-4">Node Settings</h4>
+              {renderNodeConfig(selectedNode, updateNodeConfig)}
+            </div>
+
+            {/* Connection Info */}
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-medium text-gray-900 mb-3">Connections</h4>
+              <div className="space-y-2 text-sm">
+                {selectedNode.inputs.length > 0 && (
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <div className="w-3 h-3 bg-blue-400 rounded-full" />
+                    <span>Inputs: {selectedNode.inputs.join(', ')}</span>
+                  </div>
+                )}
+                {selectedNode.outputs.length > 0 && (
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <div className="w-3 h-3 bg-green-400 rounded-full" />
+                    <span>Outputs: {selectedNode.outputs.join(', ')}</span>
+                  </div>
+                )}
+                {/* Show connected nodes */}
+                {workflow.connections.filter(c => c.sourceNodeId === selectedNode.id || c.targetNodeId === selectedNode.id).length > 0 && (
+                  <div className="mt-2 p-2 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-500 mb-1">Connected to:</p>
+                    {workflow.connections
+                      .filter(c => c.sourceNodeId === selectedNode.id || c.targetNodeId === selectedNode.id)
+                      .map(c => {
+                        const otherNodeId = c.sourceNodeId === selectedNode.id ? c.targetNodeId : c.sourceNodeId;
+                        const otherNode = workflow.nodes.find(n => n.id === otherNodeId);
+                        const direction = c.sourceNodeId === selectedNode.id ? '→' : '←';
+                        return (
+                          <div key={c.id} className="text-xs text-gray-600 flex items-center justify-between py-1">
+                            <span>{direction} {otherNode?.name || 'Unknown'}</span>
+                            <button
+                              onClick={() => deleteConnection(c.id)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Actions */}
             <div className="pt-4 border-t">

@@ -836,57 +836,68 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-12 gap-6">
-          {/* Sidebar */}
-          <div className="col-span-3">
-            <Card>
-              <CardContent className="p-4">
-                <nav className="space-y-1">
-                  {sections.map((section) => {
-                    const Icon = section.icon;
-                    return (
-                      <button
-                        key={section.id}
-                        onClick={() => setActiveSection(section.id as AdminSection)}
-                        className={cn(
-                          'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
-                          activeSection === section.id
-                            ? 'bg-primary text-white'
-                            : 'text-gray-700 hover:bg-gray-100'
-                        )}
-                      >
-                        <Icon className="w-5 h-5" />
-                        <span className="font-medium">{section.label}</span>
-                      </button>
-                    );
-                  })}
-                </nav>
-              </CardContent>
-            </Card>
-          </div>
+      <div className={cn(
+        "mx-auto px-4 py-6",
+        editingWorkflowId ? "max-w-full" : "max-w-7xl"
+      )}>
+        <div className={cn(
+          "grid gap-6",
+          editingWorkflowId ? "grid-cols-1" : "grid-cols-12"
+        )}>
+          {/* Sidebar - hidden when editing workflow */}
+          {!editingWorkflowId && (
+            <div className="col-span-3">
+              <Card>
+                <CardContent className="p-4">
+                  <nav className="space-y-1">
+                    {sections.map((section) => {
+                      const Icon = section.icon;
+                      return (
+                        <button
+                          key={section.id}
+                          onClick={() => setActiveSection(section.id as AdminSection)}
+                          className={cn(
+                            'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
+                            activeSection === section.id
+                              ? 'bg-primary text-white'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          )}
+                        >
+                          <Icon className="w-5 h-5" />
+                          <span className="font-medium">{section.label}</span>
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
-          {/* Main Content */}
-          <div className="col-span-9">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {(() => {
-                    const section = sections.find(s => s.id === activeSection);
-                    const Icon = section?.icon || Settings;
-                    return (
-                      <>
-                        <Icon className="w-5 h-5" />
-                        {section?.label}
-                      </>
-                    );
-                  })()}
-                </CardTitle>
-                <p className="text-gray-500 text-sm mt-1">
-                  {sections.find(s => s.id === activeSection)?.description}
-                </p>
-              </CardHeader>
-              <CardContent>
+          {/* Main Content - full width when editing workflow */}
+          <div className={editingWorkflowId ? "" : "col-span-9"}>
+            <Card className={editingWorkflowId ? "border-0 shadow-none" : ""}>
+              {/* Hide header when editing workflow - we have custom header */}
+              {!editingWorkflowId && (
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    {(() => {
+                      const section = sections.find(s => s.id === activeSection);
+                      const Icon = section?.icon || Settings;
+                      return (
+                        <>
+                          <Icon className="w-5 h-5" />
+                          {section?.label}
+                        </>
+                      );
+                    })()}
+                  </CardTitle>
+                  <p className="text-gray-500 text-sm mt-1">
+                    {sections.find(s => s.id === activeSection)?.description}
+                  </p>
+                </CardHeader>
+              )}
+              <CardContent className={editingWorkflowId ? "p-0" : ""}>
                 {/* Form Fields Section */}
                 {activeSection === 'forms' && (
                   <div className="space-y-6">
@@ -1278,34 +1289,48 @@ export default function AdminPage() {
                 {activeSection === 'workflows' && (
                   <div className="space-y-6">
                     {editingWorkflowId ? (
-                      // Workflow Builder View
-                      <div>
-                        <div className="flex items-center gap-2 mb-4">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setEditingWorkflowId(null)}
-                          >
-                            <ChevronRight className="w-4 h-4 mr-1 rotate-180" />
-                            Back to List
-                          </Button>
+                      // Workflow Builder View - Full Screen
+                      <div className="-m-6">
+                        {/* Workflow Editor Header */}
+                        <div className="flex items-center justify-between px-6 py-4 bg-white border-b">
+                          <div className="flex items-center gap-4">
+                            <Button
+                              variant="outline"
+                              onClick={() => setEditingWorkflowId(null)}
+                            >
+                              <ChevronRight className="w-4 h-4 mr-2 rotate-180" />
+                              Back to Workflows
+                            </Button>
+                            <div className="h-6 w-px bg-gray-300" />
+                            <div>
+                              <h2 className="text-lg font-semibold">
+                                {workflowConfigs.find(w => w.id === editingWorkflowId)?.name || 'Workflow Editor'}
+                              </h2>
+                              <p className="text-sm text-gray-500">
+                                Visual workflow builder - drag nodes and connect them
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                        {workflowConfigs.find(w => w.id === editingWorkflowId) && (
-                          <WorkflowBuilder
-                            workflow={workflowConfigs.find(w => w.id === editingWorkflowId) as any}
-                            onChange={(updatedWorkflow) => {
-                              setWorkflowConfigs(configs =>
-                                configs.map(w =>
-                                  w.id === editingWorkflowId
-                                    ? { ...w, ...updatedWorkflow, updatedAt: new Date() }
-                                    : w
-                                )
-                              );
-                            }}
-                            onSave={handleSave}
-                            saving={saving}
-                          />
-                        )}
+                        {/* Workflow Builder */}
+                        <div className="p-4 bg-gray-100">
+                          {workflowConfigs.find(w => w.id === editingWorkflowId) && (
+                            <WorkflowBuilder
+                              workflow={workflowConfigs.find(w => w.id === editingWorkflowId) as any}
+                              onChange={(updatedWorkflow) => {
+                                setWorkflowConfigs(configs =>
+                                  configs.map(w =>
+                                    w.id === editingWorkflowId
+                                      ? { ...w, ...updatedWorkflow, updatedAt: new Date() }
+                                      : w
+                                  )
+                                );
+                              }}
+                              onSave={handleSave}
+                              saving={saving}
+                            />
+                          )}
+                        </div>
                       </div>
                     ) : (
                       // Workflow List View
