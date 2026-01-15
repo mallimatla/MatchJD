@@ -35,7 +35,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 // Admin emails - users with these emails can access admin (add your admin emails here)
-const ADMIN_EMAILS = ['admin@example.com', 'admin@neurogrid.com'];
+const ADMIN_EMAILS = ['admin@example.com', 'admin@neurogrid.com', 'mallimatla@gmail.com'];
 
 type AdminSection = 'forms' | 'documents' | 'dropdowns' | 'workflows' | 'dd-templates' | 'system';
 
