@@ -25,6 +25,8 @@ import {
   GripVertical,
   Copy,
   AlertCircle,
+  Users,
+  Mail,
 } from 'lucide-react';
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { firebaseDb } from '@/lib/firebase';
@@ -34,10 +36,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-// Admin emails - users with these emails can access admin (add your admin emails here)
-const ADMIN_EMAILS = ['admin@example.com', 'admin@neurogrid.com', 'mallimatla@gmail.com'];
+// Permanent admin email - this user cannot be removed from admin list
+const PERMANENT_ADMIN = 'mallimatla@gmail.com';
 
-type AdminSection = 'forms' | 'documents' | 'dropdowns' | 'workflows' | 'dd-templates' | 'system';
+type AdminSection = 'forms' | 'documents' | 'dropdowns' | 'workflows' | 'dd-templates' | 'system' | 'admin-users';
 
 interface FieldConfig {
   id: string;
@@ -470,22 +472,42 @@ export default function AdminPage() {
   const [workflowConfigs, setWorkflowConfigs] = useState<WorkflowConfig[]>(DEFAULT_WORKFLOWS);
   const [ddTemplates, setDdTemplates] = useState<DDTemplate[]>(DEFAULT_DD_TEMPLATES);
   const [systemConfig, setSystemConfig] = useState<SystemConfig>(DEFAULT_SYSTEM_CONFIG);
+  const [adminEmails, setAdminEmails] = useState<string[]>([]);
+  const [newAdminEmail, setNewAdminEmail] = useState('');
 
   // UI states
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [editingField, setEditingField] = useState<string | null>(null);
 
-  // Check if user is admin - ONLY users in ADMIN_EMAILS list can access
+  // Check if user is admin - permanent admin OR in adminEmails list from Firestore
   useEffect(() => {
-    const checkAdmin = () => {
+    const checkAdmin = async () => {
       if (!user) {
         setAdminCheckComplete(true);
         return;
       }
 
-      // ONLY allow users whose email is in the ADMIN_EMAILS list
-      const emailIsAdmin = ADMIN_EMAILS.includes(user.email || '');
-      setIsAdmin(emailIsAdmin);
+      // Permanent admin always has access
+      if (user.email === PERMANENT_ADMIN) {
+        setIsAdmin(true);
+        setAdminCheckComplete(true);
+        return;
+      }
+
+      // Check if user email is in the admin emails list from Firestore
+      try {
+        const adminDoc = await getDoc(doc(firebaseDb, 'config', 'adminUsers'));
+        if (adminDoc.exists()) {
+          const emails = adminDoc.data().emails || [];
+          setIsAdmin(emails.includes(user.email));
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+      }
+
       setAdminCheckComplete(true);
     };
 
@@ -535,6 +557,12 @@ export default function AdminPage() {
         if (systemDoc.exists()) {
           setSystemConfig(systemDoc.data() as SystemConfig || DEFAULT_SYSTEM_CONFIG);
         }
+
+        // Load admin emails
+        const adminDoc = await getDoc(doc(firebaseDb, 'config', 'adminUsers'));
+        if (adminDoc.exists()) {
+          setAdminEmails(adminDoc.data().emails || []);
+        }
       } catch (error) {
         console.error('Error loading configs:', error);
       }
@@ -560,6 +588,7 @@ export default function AdminPage() {
         setDoc(doc(firebaseDb, 'config', 'workflows'), { configs: workflowConfigs, updatedAt: new Date() }),
         setDoc(doc(firebaseDb, 'config', 'ddTemplates'), { configs: ddTemplates, updatedAt: new Date() }),
         setDoc(doc(firebaseDb, 'config', 'system'), { ...systemConfig, updatedAt: new Date() }),
+        setDoc(doc(firebaseDb, 'config', 'adminUsers'), { emails: adminEmails, updatedAt: new Date() }),
       ]);
 
       setSaveStatus('success');
@@ -693,6 +722,7 @@ export default function AdminPage() {
     { id: 'workflows', label: 'Workflows', icon: Workflow, description: 'Enable/disable workflows and configure steps' },
     { id: 'dd-templates', label: 'DD Templates', icon: Database, description: 'Configure due diligence workstream templates' },
     { id: 'system', label: 'System Settings', icon: Settings, description: 'General system configuration' },
+    { id: 'admin-users', label: 'Admin Users', icon: Users, description: 'Manage users who can access the admin portal' },
   ];
 
   return (
@@ -1544,6 +1574,119 @@ export default function AdminPage() {
                             </div>
                           </label>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Admin Users Section */}
+                {activeSection === 'admin-users' && (
+                  <div className="space-y-6">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                      <div className="flex items-start gap-3">
+                        <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
+                        <div>
+                          <h4 className="font-medium text-blue-900">Permanent Admin</h4>
+                          <p className="text-sm text-blue-700 mt-1">
+                            <strong>{PERMANENT_ADMIN}</strong> is the permanent admin and cannot be removed.
+                            Add additional admin users below.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Add new admin */}
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-medium mb-3">Add New Admin</h3>
+                      <div className="flex gap-3">
+                        <div className="flex-1">
+                          <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                              type="email"
+                              value={newAdminEmail}
+                              onChange={(e) => setNewAdminEmail(e.target.value)}
+                              placeholder="Enter email address"
+                              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            if (newAdminEmail && !adminEmails.includes(newAdminEmail) && newAdminEmail !== PERMANENT_ADMIN) {
+                              setAdminEmails([...adminEmails, newAdminEmail]);
+                              setNewAdminEmail('');
+                            }
+                          }}
+                          disabled={!newAdminEmail || adminEmails.includes(newAdminEmail) || newAdminEmail === PERMANENT_ADMIN}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Admin
+                        </Button>
+                      </div>
+                      {newAdminEmail === PERMANENT_ADMIN && (
+                        <p className="text-sm text-amber-600 mt-2">This email is already the permanent admin.</p>
+                      )}
+                      {adminEmails.includes(newAdminEmail) && newAdminEmail !== '' && (
+                        <p className="text-sm text-amber-600 mt-2">This email is already an admin.</p>
+                      )}
+                    </div>
+
+                    {/* Admin list */}
+                    <div className="border rounded-lg">
+                      <div className="p-4 border-b bg-gray-50">
+                        <h3 className="font-medium">Current Admin Users</h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {adminEmails.length + 1} admin user{adminEmails.length !== 0 ? 's' : ''} total
+                        </p>
+                      </div>
+                      <div className="divide-y">
+                        {/* Permanent admin - always shown first */}
+                        <div className="flex items-center justify-between p-4 bg-blue-50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                              <Shield className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <div className="font-medium">{PERMANENT_ADMIN}</div>
+                              <div className="text-sm text-gray-500">Permanent Admin</div>
+                            </div>
+                          </div>
+                          <Badge variant="info">Protected</Badge>
+                        </div>
+
+                        {/* Additional admins */}
+                        {adminEmails.map((email, index) => (
+                          <div key={email} className="flex items-center justify-between p-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                                <Users className="w-5 h-5 text-gray-600" />
+                              </div>
+                              <div>
+                                <div className="font-medium">{email}</div>
+                                <div className="text-sm text-gray-500">Admin User</div>
+                              </div>
+                            </div>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => {
+                                setAdminEmails(adminEmails.filter((_, i) => i !== index));
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Remove
+                            </Button>
+                          </div>
+                        ))}
+
+                        {adminEmails.length === 0 && (
+                          <div className="p-8 text-center text-gray-500">
+                            <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                            <p>No additional admin users added yet.</p>
+                            <p className="text-sm mt-1">Add admin users above to grant them access to this portal.</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
