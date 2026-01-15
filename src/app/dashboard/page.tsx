@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useProjects, useReviewQueue, useAllDocuments, useAllParcels } from '@/hooks/useFirestore';
+import { useSystemConfig } from '@/hooks/useConfig';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,7 @@ export default function DashboardPage() {
   const { data: reviewItems } = useReviewQueue();
   const { data: allDocuments } = useAllDocuments();
   const { data: allParcels } = useAllParcels();
+  const { config: systemConfig } = useSystemConfig();
   const [activeTab, setActiveTab] = useState<'projects' | 'review'>('projects');
   const router = useRouter();
 
@@ -57,7 +59,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
               <Sun className="w-8 h-8 text-primary" />
-              <span className="text-xl font-bold">Neurogrid</span>
+              <span className="text-xl font-bold">{systemConfig.appName}</span>
             </div>
             <div className="flex items-center gap-4">
               <NotificationsPanel onNavigate={(url) => router.push(url)} />

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sun, Mail, Lock, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useSystemConfig } from '@/hooks/useConfig';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
@@ -16,6 +17,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
 
   const { signIn, signUp, signInWithGoogle } = useAuth();
+  const { config: systemConfig } = useSystemConfig();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,7 +61,7 @@ export default function LoginPage() {
               <Sun className="w-8 h-8 text-white" />
             </div>
           </div>
-          <CardTitle className="text-2xl">Neurogrid</CardTitle>
+          <CardTitle className="text-2xl">{systemConfig.appName}</CardTitle>
           <CardDescription>
             {isLogin ? 'Sign in to your account' : 'Create a new account'}
           </CardDescription>
