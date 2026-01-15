@@ -411,7 +411,7 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
     if (e.target === canvasRef.current) {
       setIsPanning(true);
       setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-      setSelectedNodeId(null);
+      // Don't clear selectedNodeId here - do it in handleCanvasClick instead
     }
   };
 
@@ -426,7 +426,19 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
 
   const handleCanvasMouseUp = () => {
     setIsPanning(false);
-    setConnectingFrom(null);
+    // Don't clear connectingFrom here - let the click handlers manage it
+    // connectingFrom will be cleared when:
+    // 1. User clicks on an input port (connection made)
+    // 2. User clicks the X button in the toolbar
+    // 3. User clicks on empty canvas (handleCanvasClick)
+  };
+
+  // Handle clicking on empty canvas to cancel connection mode
+  const handleCanvasClick = (e: React.MouseEvent) => {
+    if (e.target === canvasRef.current) {
+      setConnectingFrom(null);
+      setSelectedNodeId(null);
+    }
   };
 
   // Render connection line
@@ -507,7 +519,13 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
         }}
         onClick={(e) => {
           e.stopPropagation();
-          setSelectedNodeId(node.id);
+          // If we're connecting and this node can be a target, complete the connection
+          if (connectingFrom && connectingFrom.nodeId !== node.id && node.inputs.length > 0) {
+            addConnection(connectingFrom.nodeId, connectingFrom.output, node.id);
+            setConnectingFrom(null);
+          } else {
+            setSelectedNodeId(node.id);
+          }
         }}
         draggable
         onDragEnd={(e) => {
@@ -728,11 +746,15 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
           onMouseMove={handleCanvasMouseMove}
           onMouseUp={handleCanvasMouseUp}
           onMouseLeave={handleCanvasMouseUp}
+          onClick={handleCanvasClick}
         >
           {/* SVG for connections */}
           <svg
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}
+            className="absolute inset-0 w-full h-full"
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px)`,
+              pointerEvents: 'none'
+            }}
           >
             <defs>
               <marker
@@ -746,7 +768,9 @@ export function WorkflowBuilder({ workflow, onChange, onSave, saving }: Workflow
                 <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
               </marker>
             </defs>
-            {workflow.connections.map(renderConnection)}
+            <g style={{ pointerEvents: 'auto' }}>
+              {workflow.connections.map(renderConnection)}
+            </g>
           </svg>
 
           {/* Nodes */}
