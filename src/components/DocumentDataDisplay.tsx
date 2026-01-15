@@ -422,27 +422,51 @@ export function DocumentDataDisplay({
 
   // If no configured fields have data, show raw extracted data instead
   if (fieldsWithData.length === 0 && Object.keys(data).length > 0) {
+    // Flatten nested objects for better display
+    const flattenedEntries: { key: string; value: any; label: string }[] = [];
+
+    Object.entries(data).forEach(([key, value]) => {
+      const label = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^./, (s) => s.toUpperCase());
+
+      if (value !== null && value !== undefined && typeof value === 'object' && !Array.isArray(value)) {
+        // Flatten nested objects - extract each field
+        Object.entries(value as object).forEach(([nestedKey, nestedValue]) => {
+          if (nestedValue !== null && nestedValue !== undefined) {
+            const nestedLabel = nestedKey.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^./, (s) => s.toUpperCase());
+            flattenedEntries.push({
+              key: `${key}.${nestedKey}`,
+              value: nestedValue,
+              label: nestedLabel,
+            });
+          }
+        });
+      } else {
+        flattenedEntries.push({ key, value, label });
+      }
+    });
+
     return (
       <div className={cn('space-y-3', className)}>
         <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
           Note: Configured field paths don&apos;t match extracted data. Showing raw extraction results:
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {Object.entries(data).slice(0, 12).map(([key, value], i) => {
+          {flattenedEntries.slice(0, 16).map(({ key, value, label }, i) => {
             const colorScheme = colorSchemes[i % colorSchemes.length];
             const [bgColor, textColor] = colorScheme.split(' ');
 
-            // Format the key for display
-            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
-
-            // Format the value - handle nested objects
+            // Format the value
             let displayValue: string;
             if (value === null || value === undefined) {
               displayValue = 'N/A';
             } else if (typeof value === 'object' && !Array.isArray(value)) {
+              // Still an object - try to get name or stringify
               displayValue = (value as any).name || (value as any).value || JSON.stringify(value);
             } else if (Array.isArray(value)) {
-              displayValue = value.join(', ') || 'Empty';
+              displayValue = value.length > 0 ? value.join(', ') : 'None';
+            } else if (typeof value === 'number') {
+              // Format numbers nicely
+              displayValue = value.toLocaleString();
             } else {
               displayValue = String(value);
             }
@@ -453,7 +477,7 @@ export function DocumentDataDisplay({
                   <FileText className="w-3.5 h-3.5" />
                   {label}
                 </div>
-                <div className="text-sm text-gray-900 font-medium">
+                <div className="text-sm text-gray-900 font-medium break-words">
                   {displayValue}
                 </div>
               </div>
