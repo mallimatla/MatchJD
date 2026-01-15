@@ -29,7 +29,7 @@ const getDb = () => admin.firestore();
 // Types
 // ============================================
 
-interface WorkflowState {
+export interface WorkflowState {
   workflowId: string;
   tenantId: string;
   workflowType: string;
@@ -90,13 +90,35 @@ export class WorkflowOrchestrator {
   ): Promise<string> {
     const workflowId = uuidv4();
 
+    // Fetch project data if projectId is provided
+    let projectData: Record<string, any> = {};
+    let parcelsData: Record<string, any>[] = [];
+
+    if (input.projectId) {
+      const projectDoc = await getDb().doc(`projects/${input.projectId}`).get();
+      if (projectDoc.exists) {
+        projectData = { id: projectDoc.id, ...projectDoc.data() };
+      }
+
+      // Fetch parcels for the project
+      const parcelsSnap = await getDb()
+        .collection('parcels')
+        .where('projectId', '==', input.projectId)
+        .get();
+      parcelsData = parcelsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+
     const state: WorkflowState = {
       workflowId,
       tenantId: input.tenantId,
       workflowType,
       status: 'pending',
       currentNode: 'start',
-      data: input,
+      data: {
+        ...input,
+        project: projectData,
+        parcels: parcelsData,
+      },
       history: [],
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -105,7 +127,7 @@ export class WorkflowOrchestrator {
     // Save initial state
     await this.saveState(state);
 
-    // Start execution
+    // Start execution (don't await - let it run asynchronously)
     this.executeWorkflow(workflowId).catch((error) => {
       console.error(`Workflow ${workflowId} failed:`, error);
       this.updateState(workflowId, {
@@ -169,6 +191,21 @@ export class WorkflowOrchestrator {
   }
 
   /**
+   * Get all workflows for a project
+   */
+  async getWorkflowsForProject(projectId: string, tenantId: string): Promise<WorkflowState[]> {
+    const snapshot = await getDb()
+      .collection('workflows')
+      .where('tenantId', '==', tenantId)
+      .where('data.projectId', '==', projectId)
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get();
+
+    return snapshot.docs.map(doc => doc.data() as WorkflowState);
+  }
+
+  /**
    * Execute workflow from current state
    */
   private async executeWorkflow(workflowId: string): Promise<void> {
@@ -197,7 +234,7 @@ export class WorkflowOrchestrator {
       const node = workflow.nodes.find((n) => n.name === currentNode);
       if (!node) throw new Error(`Node not found: ${currentNode}`);
 
-      console.log(`Executing node: ${currentNode}`);
+      console.log(`Executing node: ${currentNode} for workflow ${workflowId}`);
 
       // Execute node
       const updates = await node.execute(state);
@@ -207,6 +244,10 @@ export class WorkflowOrchestrator {
         ...state,
         ...updates,
         currentNode,
+        data: {
+          ...state.data,
+          ...updates.data,
+        },
         history: [
           ...state.history,
           {
@@ -271,6 +312,21 @@ export class WorkflowOrchestrator {
   }
 
   /**
+   * Update project status in Firestore
+   */
+  private async updateProjectStatus(
+    projectId: string,
+    status: string,
+    additionalData?: Record<string, any>
+  ): Promise<void> {
+    await getDb().doc(`projects/${projectId}`).update({
+      status,
+      ...additionalData,
+      updatedAt: new Date(),
+    });
+  }
+
+  /**
    * Create HITL interrupt - pauses workflow until human responds
    */
   private async createHITLInterrupt(
@@ -279,19 +335,22 @@ export class WorkflowOrchestrator {
     options?: {
       urgency?: 'low' | 'medium' | 'high' | 'critical';
       context?: Record<string, any>;
+      projectId?: string;
     }
   ): Promise<void> {
     // Create HITL request
     await getDb().collection('hitlRequests').add({
       tenantId: state.tenantId,
       workflowId: state.workflowId,
-      requestType: 'approval',
+      projectId: options?.projectId || state.data.projectId,
+      requestType: 'workflow_approval',
       urgency: options?.urgency || 'medium',
       status: 'pending',
       description: reason,
       context: {
         workflowType: state.workflowType,
         currentNode: state.currentNode,
+        projectName: state.data.project?.name,
         ...options?.context,
       },
       createdAt: new Date(),
@@ -408,51 +467,127 @@ export class WorkflowOrchestrator {
    * Land Acquisition Workflow
    *
    * Flow: Site Analysis → Due Diligence → Lease Negotiation → Legal Review → Execute
+   *
+   * This workflow manages the complete land acquisition process for solar projects.
+   * It includes AI-powered site analysis, due diligence tracking, and HITL gates
+   * for legal review before lease execution.
    */
   private registerLandAcquisitionWorkflow(): void {
     const nodes: WorkflowNode[] = [
       {
         name: 'site_analysis',
         execute: async (state) => {
-          // Use Claude to analyze site suitability
-          const response = await this.anthropic.messages.create({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 2048,
-            messages: [
-              {
-                role: 'user',
-                content: `Analyze this parcel for solar development suitability:
+          const project = state.data.project;
+          const parcels = state.data.parcels || [];
 
-Parcel: ${JSON.stringify(state.data.parcel)}
-Project Requirements: ${JSON.stringify(state.data.requirements)}
-
-Evaluate:
-1. Physical suitability (size, topography)
-2. Zoning compatibility
-3. Environmental constraints
-4. Grid proximity
-5. Access considerations
-
-Return JSON with suitabilityScore (0-100) and analysis.`,
+          // Skip if no parcels
+          if (parcels.length === 0) {
+            return {
+              data: {
+                ...state.data,
+                phase: 'site_analysis',
+                siteAnalysis: {
+                  status: 'skipped',
+                  reason: 'No parcels defined for this project',
+                },
               },
-            ],
+            };
+          }
+
+          // Use Claude to analyze site suitability for each parcel
+          const analysisPromises = parcels.map(async (parcel: any) => {
+            try {
+              const response = await this.anthropic.messages.create({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 2048,
+                messages: [
+                  {
+                    role: 'user',
+                    content: `Analyze this parcel for solar development suitability:
+
+Parcel Details:
+- APN: ${parcel.apn}
+- County: ${parcel.county}, ${parcel.state}
+- Acreage: ${parcel.acres} acres
+- Zoning: ${parcel.zoning}
+- Land Use: ${parcel.landUse}
+- Owner: ${parcel.ownerName}
+
+Project Requirements:
+- Target Capacity: ${project?.capacityMwAc || 'Not specified'} MW AC
+- Project Type: ${project?.type || 'utility_solar'}
+- Target COD: ${project?.targetCod || 'Not specified'}
+
+Evaluate and score each category (0-100):
+1. Physical Suitability - Is the parcel size adequate? Estimated MW capacity?
+2. Zoning Compatibility - Is solar development permitted or conditional use required?
+3. Environmental Constraints - Potential wetlands, flood zones, endangered species concerns?
+4. Grid Proximity - Based on location, estimate grid connection feasibility
+5. Access Considerations - Road access, transmission line proximity
+
+Return JSON:
+{
+  "parcelId": "${parcel.id}",
+  "apn": "${parcel.apn}",
+  "overallScore": <0-100>,
+  "scores": {
+    "physical": <0-100>,
+    "zoning": <0-100>,
+    "environmental": <0-100>,
+    "grid": <0-100>,
+    "access": <0-100>
+  },
+  "estimatedCapacityMw": <number>,
+  "issues": ["list of potential issues"],
+  "recommendations": ["list of recommendations"],
+  "recommendation": "proceed" | "proceed_with_caution" | "not_recommended"
+}`,
+                  },
+                ],
+              });
+
+              const content = response.content[0];
+              if (content.type === 'text') {
+                try {
+                  return JSON.parse(content.text.replace(/```json?\n?|```$/g, ''));
+                } catch {
+                  return {
+                    parcelId: parcel.id,
+                    apn: parcel.apn,
+                    rawAnalysis: content.text,
+                    error: 'Failed to parse analysis',
+                  };
+                }
+              }
+            } catch (error: any) {
+              return {
+                parcelId: parcel.id,
+                apn: parcel.apn,
+                error: error.message,
+              };
+            }
           });
 
-          let analysis = {};
-          const content = response.content[0];
-          if (content.type === 'text') {
-            try {
-              analysis = JSON.parse(content.text.replace(/```json?\n?|```$/g, ''));
-            } catch {
-              analysis = { rawAnalysis: content.text };
-            }
-          }
+          const analysisResults = await Promise.all(analysisPromises);
+
+          // Calculate overall project suitability
+          const validResults = analysisResults.filter((r: any) => r.overallScore !== undefined);
+          const avgScore = validResults.length > 0
+            ? validResults.reduce((sum: number, r: any) => sum + r.overallScore, 0) / validResults.length
+            : 0;
 
           return {
             data: {
               ...state.data,
               phase: 'site_analysis',
-              siteAnalysis: analysis,
+              siteAnalysis: {
+                status: 'completed',
+                completedAt: new Date(),
+                parcelsAnalyzed: parcels.length,
+                results: analysisResults,
+                overallScore: Math.round(avgScore),
+                recommendation: avgScore >= 70 ? 'proceed' : avgScore >= 50 ? 'proceed_with_caution' : 'not_recommended',
+              },
             },
           };
         },
@@ -460,11 +595,33 @@ Return JSON with suitabilityScore (0-100) and analysis.`,
       {
         name: 'due_diligence',
         execute: async (state) => {
+          const projectId = state.data.projectId;
+
+          // Create DD workstreams if they don't exist
+          const ddWorkstreams = [
+            { id: 'title_review', name: 'Title Review', status: 'not_started', category: 'legal' },
+            { id: 'environmental', name: 'Environmental Review', status: 'not_started', category: 'environmental' },
+            { id: 'survey', name: 'Land Survey', status: 'not_started', category: 'technical' },
+            { id: 'permitting', name: 'Permitting Assessment', status: 'not_started', category: 'permits' },
+            { id: 'interconnection', name: 'Interconnection Study', status: 'not_started', category: 'grid' },
+            { id: 'financial', name: 'Financial Analysis', status: 'not_started', category: 'financial' },
+          ];
+
+          // Store DD workstreams in the project
+          if (projectId) {
+            await getDb().doc(`projects/${projectId}`).update({
+              ddWorkstreams,
+              ddStatus: 'in_progress',
+              ddStartedAt: new Date(),
+            });
+          }
+
           return {
             data: {
               ...state.data,
               phase: 'due_diligence',
               ddStatus: 'in_progress',
+              ddWorkstreams,
             },
           };
         },
@@ -472,10 +629,67 @@ Return JSON with suitabilityScore (0-100) and analysis.`,
       {
         name: 'lease_negotiation',
         execute: async (state) => {
+          const project = state.data.project;
+          const parcels = state.data.parcels || [];
+
+          // Generate recommended lease terms based on analysis
+          let recommendedTerms: any = {
+            status: 'ready_for_negotiation',
+          };
+
+          if (parcels.length > 0) {
+            const totalAcres = parcels.reduce((sum: number, p: any) => sum + (p.acres || 0), 0);
+            const estimatedCapacity = totalAcres * 5; // ~5 acres per MW rule of thumb
+
+            try {
+              const response = await this.anthropic.messages.create({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 1024,
+                messages: [
+                  {
+                    role: 'user',
+                    content: `Based on the following project details, suggest initial lease negotiation terms:
+
+Project: ${project?.name || 'Solar Project'}
+Location: ${project?.county || 'Unknown'}, ${project?.state || 'Unknown'}
+Total Acreage: ${totalAcres} acres
+Estimated Capacity: ${estimatedCapacity} MW
+Number of Parcels: ${parcels.length}
+
+Suggest reasonable lease terms in JSON format:
+{
+  "suggestedRentPerAcre": <number in USD>,
+  "suggestedTermYears": <number>,
+  "suggestedEscalation": <percentage>,
+  "recommendedSigningBonus": <number in USD>,
+  "keyNegotiationPoints": ["list of important items to negotiate"],
+  "marketComparison": "brief market analysis"
+}`,
+                  },
+                ],
+              });
+
+              const content = response.content[0];
+              if (content.type === 'text') {
+                try {
+                  recommendedTerms = {
+                    ...recommendedTerms,
+                    ...JSON.parse(content.text.replace(/```json?\n?|```$/g, '')),
+                  };
+                } catch {
+                  recommendedTerms.rawSuggestion = content.text;
+                }
+              }
+            } catch (error: any) {
+              recommendedTerms.error = error.message;
+            }
+          }
+
           return {
             data: {
               ...state.data,
               phase: 'lease_negotiation',
+              leaseTerms: recommendedTerms,
             },
           };
         },
@@ -487,12 +701,20 @@ Return JSON with suitabilityScore (0-100) and analysis.`,
           if (!state.data.hitlResponse) {
             await this.createHITLInterrupt(
               state,
-              'Lease requires attorney review before execution',
+              'Lease terms require legal review before execution',
               {
                 urgency: 'high',
+                projectId: state.data.projectId,
                 context: {
+                  projectName: state.data.project?.name,
                   leaseTerms: state.data.leaseTerms,
-                  parcel: state.data.parcel,
+                  siteAnalysis: state.data.siteAnalysis,
+                  parcels: state.data.parcels?.map((p: any) => ({
+                    apn: p.apn,
+                    acres: p.acres,
+                    county: p.county,
+                    state: p.state,
+                  })),
                 },
               }
             );
@@ -504,6 +726,8 @@ Return JSON with suitabilityScore (0-100) and analysis.`,
               ...state.data,
               phase: 'legal_review',
               legalApproved: state.data.hitlResponse.approved,
+              legalNotes: state.data.hitlResponse.notes,
+              legalReviewedAt: new Date(),
             },
           };
         },
@@ -511,20 +735,52 @@ Return JSON with suitabilityScore (0-100) and analysis.`,
       {
         name: 'execute_lease',
         execute: async (state) => {
+          const projectId = state.data.projectId;
+
           if (!state.data.legalApproved) {
+            // Update project status to reflect rejection
+            if (projectId) {
+              await this.updateProjectStatus(projectId, 'prospecting', {
+                leaseStatus: 'rejected',
+                leaseRejectionReason: state.data.legalNotes,
+              });
+            }
+
             return {
               data: {
                 ...state.data,
                 phase: 'rejected',
                 status: 'lease_rejected',
+                rejectedAt: new Date(),
               },
             };
           }
+
+          // Update project status to site_control (lease executed)
+          if (projectId) {
+            await this.updateProjectStatus(projectId, 'site_control', {
+              leaseStatus: 'executed',
+              leaseExecutedAt: new Date(),
+            });
+
+            // Update parcel statuses to 'leased'
+            const parcels = state.data.parcels || [];
+            for (const parcel of parcels) {
+              if (parcel.id) {
+                await getDb().doc(`parcels/${parcel.id}`).update({
+                  status: 'leased',
+                  leasedAt: new Date(),
+                });
+              }
+            }
+          }
+
           return {
             data: {
               ...state.data,
               phase: 'executed',
               executedAt: new Date(),
+              leaseStatus: 'executed',
             },
           };
         },
@@ -550,17 +806,33 @@ Return JSON with suitabilityScore (0-100) and analysis.`,
    * Project Lifecycle Workflow
    *
    * Parent workflow that orchestrates the entire project development
+   * through key milestones: Prospecting → Site Control → Development → Construction
    */
   private registerProjectLifecycleWorkflow(): void {
     const nodes: WorkflowNode[] = [
       {
         name: 'prospecting',
         execute: async (state) => {
+          const projectId = state.data.projectId;
+
+          // Update project status
+          if (projectId) {
+            await this.updateProjectStatus(projectId, 'prospecting', {
+              lifecyclePhase: 'prospecting',
+              prospectingStartedAt: new Date(),
+            });
+          }
+
           return {
             data: {
               ...state.data,
               phase: 'prospecting',
               phaseStartedAt: new Date(),
+              checklist: {
+                siteIdentified: true,
+                initialAssessmentComplete: false,
+                landownerContactInitiated: false,
+              },
             },
           };
         },
@@ -568,11 +840,26 @@ Return JSON with suitabilityScore (0-100) and analysis.`,
       {
         name: 'site_control',
         execute: async (state) => {
-          // Would trigger land acquisition sub-workflow
+          const projectId = state.data.projectId;
+
+          // Update project status
+          if (projectId) {
+            await this.updateProjectStatus(projectId, 'site_control', {
+              lifecyclePhase: 'site_control',
+              siteControlStartedAt: new Date(),
+            });
+          }
+
           return {
             data: {
               ...state.data,
               phase: 'site_control',
+              checklist: {
+                ...state.data.checklist,
+                leaseNegotiated: false,
+                leaseExecuted: false,
+                titleCleared: false,
+              },
             },
           };
         },
@@ -580,10 +867,27 @@ Return JSON with suitabilityScore (0-100) and analysis.`,
       {
         name: 'development',
         execute: async (state) => {
+          const projectId = state.data.projectId;
+
+          // Update project status
+          if (projectId) {
+            await this.updateProjectStatus(projectId, 'development', {
+              lifecyclePhase: 'development',
+              developmentStartedAt: new Date(),
+            });
+          }
+
           return {
             data: {
               ...state.data,
               phase: 'development',
+              checklist: {
+                ...state.data.checklist,
+                interconnectionFiled: false,
+                permitsSubmitted: false,
+                engineeringStarted: false,
+                ppaExecuted: false,
+              },
             },
           };
         },
@@ -591,29 +895,81 @@ Return JSON with suitabilityScore (0-100) and analysis.`,
       {
         name: 'construction_ready',
         execute: async (state) => {
-          // Final approval gate
+          // Final approval gate before construction
           if (!state.data.hitlResponse) {
+            // Build summary for approval
+            const project = state.data.project;
+            const summary = {
+              projectName: project?.name,
+              capacity: project?.capacityMwAc,
+              capex: project?.capexUsd,
+              targetCod: project?.targetCod,
+              phase: 'Ready for Construction',
+              milestones: state.data.checklist,
+            };
+
             await this.createHITLInterrupt(
               state,
               'Project ready for construction - final approval required',
               {
                 urgency: 'critical',
+                projectId: state.data.projectId,
                 context: {
-                  projectId: state.data.projectId,
-                  projectSummary: state.data.summary,
+                  summary,
+                  financials: {
+                    estimatedCapex: project?.capexUsd,
+                    capacity: project?.capacityMwAc,
+                  },
+                  requiresApproval: [
+                    'Management sign-off',
+                    'Financial close confirmation',
+                    'NTP authorization',
+                  ],
                 },
               }
             );
             return { status: 'paused' };
           }
 
-          return {
-            data: {
-              ...state.data,
-              phase: 'approved',
-              approvedAt: new Date(),
-            },
-          };
+          const projectId = state.data.projectId;
+
+          if (state.data.hitlResponse.approved) {
+            // Update to construction_ready status
+            if (projectId) {
+              await this.updateProjectStatus(projectId, 'construction_ready', {
+                lifecyclePhase: 'construction_ready',
+                constructionReadyAt: new Date(),
+                ntpApproved: true,
+                ntpApprovedBy: state.data.hitlResponse.resolvedBy,
+              });
+            }
+
+            return {
+              data: {
+                ...state.data,
+                phase: 'approved',
+                approvedAt: new Date(),
+                ntpApproved: true,
+              },
+            };
+          } else {
+            // NTP not approved - stay in development
+            if (projectId) {
+              await this.updateProjectStatus(projectId, 'development', {
+                ntpRejectionReason: state.data.hitlResponse.notes,
+                ntpRejectedAt: new Date(),
+              });
+            }
+
+            return {
+              data: {
+                ...state.data,
+                phase: 'ntp_rejected',
+                ntpApproved: false,
+                rejectionReason: state.data.hitlResponse.notes,
+              },
+            };
+          }
         },
       },
     ];
