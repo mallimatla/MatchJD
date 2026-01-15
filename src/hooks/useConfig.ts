@@ -119,11 +119,35 @@ const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   },
 };
 
+// Default form configurations (fallback when no Firestore config exists)
+const DEFAULT_PROJECT_FIELDS: FieldConfig[] = [
+  { id: 'name', name: 'name', label: 'Project Name', type: 'text', required: true, visible: true, order: 1, placeholder: 'Enter project name' },
+  { id: 'type', name: 'type', label: 'Project Type', type: 'select', required: true, visible: true, order: 2, options: ['utility_solar', 'distributed_solar', 'storage', 'hybrid'] },
+  { id: 'description', name: 'description', label: 'Description', type: 'textarea', required: false, visible: true, order: 3, placeholder: 'Project description...' },
+  { id: 'state', name: 'state', label: 'State', type: 'text', required: true, visible: true, order: 4, placeholder: 'e.g., CA' },
+  { id: 'county', name: 'county', label: 'County', type: 'text', required: true, visible: true, order: 5, placeholder: 'e.g., Kern' },
+  { id: 'capacityMwAc', name: 'capacityMwAc', label: 'Capacity (MW AC)', type: 'number', required: true, visible: true, order: 6 },
+  { id: 'capacityMwDc', name: 'capacityMwDc', label: 'Capacity (MW DC)', type: 'number', required: false, visible: true, order: 7 },
+  { id: 'capexUsd', name: 'capexUsd', label: 'Estimated CAPEX', type: 'currency', required: false, visible: true, order: 8 },
+  { id: 'targetCod', name: 'targetCod', label: 'Target COD', type: 'date', required: false, visible: true, order: 9 },
+];
+
+const DEFAULT_PARCEL_FIELDS: FieldConfig[] = [
+  { id: 'apn', name: 'apn', label: 'APN', type: 'text', required: true, visible: true, order: 1, placeholder: 'Assessor Parcel Number' },
+  { id: 'county', name: 'county', label: 'County', type: 'text', required: true, visible: true, order: 2 },
+  { id: 'state', name: 'state', label: 'State', type: 'text', required: true, visible: true, order: 3 },
+  { id: 'acres', name: 'acres', label: 'Acreage', type: 'number', required: true, visible: true, order: 4 },
+  { id: 'ownerName', name: 'ownerName', label: 'Owner Name', type: 'text', required: false, visible: true, order: 5 },
+];
+
 // Hook to get form configuration
 export function useFormConfig(formId: string) {
   const [config, setConfig] = useState<FormConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+
+  // Default fields based on form ID
+  const defaultFields = formId === 'project' ? DEFAULT_PROJECT_FIELDS : formId === 'parcel' ? DEFAULT_PARCEL_FIELDS : [];
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -146,10 +170,11 @@ export function useFormConfig(formId: string) {
     return () => unsubscribe();
   }, [formId]);
 
-  // Get visible fields sorted by order
-  const visibleFields = config?.fields
+  // Get visible fields sorted by order - use defaults if no config
+  const configFields = config?.fields || defaultFields;
+  const visibleFields = configFields
     .filter((f) => f.visible)
-    .sort((a, b) => a.order - b.order) || [];
+    .sort((a, b) => a.order - b.order);
 
   return { config, visibleFields, loading, error };
 }

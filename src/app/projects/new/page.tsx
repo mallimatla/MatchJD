@@ -11,7 +11,6 @@ import {
   DollarSign,
   Calendar,
   Zap,
-  Building2,
   Info,
   CheckCircle2,
   AlertCircle
@@ -21,7 +20,6 @@ import { firebaseDb, firebaseAuth } from '@/lib/firebase';
 import { useFormConfig, useDropdownConfig, useSystemConfig } from '@/hooks/useConfig';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 // Field type to icon mapping
@@ -56,25 +54,13 @@ const getFieldSection = (fieldName: string): string => {
   return 'Additional Information';
 };
 
-// Determine if fields should be in a row together
-const shouldGroupFields = (field1: string, field2: string): boolean => {
-  const pairs = [
-    ['state', 'county'],
-    ['capacityMwAc', 'capacityMwDc'],
-    ['latitude', 'longitude'],
-    ['startDate', 'endDate'],
-  ];
-  return pairs.some(pair =>
-    (pair.includes(field1.toLowerCase()) && pair.includes(field2.toLowerCase()))
-  );
-};
-
 export default function NewProjectPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [initialized, setInitialized] = useState(false);
 
   // Load dynamic form configuration
   const { visibleFields, loading: configLoading } = useFormConfig('project');
@@ -115,14 +101,15 @@ export default function NewProjectPage() {
 
   // Initialize form data with default values when config loads
   useEffect(() => {
-    if (visibleFields.length > 0) {
+    if (visibleFields.length > 0 && !initialized) {
       const initialData: Record<string, any> = {};
       visibleFields.forEach(field => {
-        initialData[field.name] = field.defaultValue || '';
+        initialData[field.name] = field.defaultValue !== undefined ? field.defaultValue : '';
       });
       setFormData(initialData);
+      setInitialized(true);
     }
-  }, [visibleFields]);
+  }, [visibleFields, initialized]);
 
   const handleFieldChange = (fieldName: string, value: any) => {
     setFormData(prev => ({ ...prev, [fieldName]: value }));
@@ -140,14 +127,9 @@ export default function NewProjectPage() {
     const newErrors: Record<string, string> = {};
 
     visibleFields.forEach(field => {
-      if (field.required && !formData[field.name]) {
+      const value = formData[field.name];
+      if (field.required && (value === '' || value === undefined || value === null)) {
         newErrors[field.name] = `${field.label} is required`;
-      }
-      if (field.validation?.min && Number(formData[field.name]) < field.validation.min) {
-        newErrors[field.name] = `Minimum value is ${field.validation.min}`;
-      }
-      if (field.validation?.max && Number(formData[field.name]) > field.validation.max) {
-        newErrors[field.name] = `Maximum value is ${field.validation.max}`;
       }
     });
 
@@ -206,6 +188,8 @@ export default function NewProjectPage() {
   // Render a field based on its configuration
   const renderField = (field: any) => {
     const hasError = touched[field.name] && errors[field.name];
+    const value = formData[field.name] !== undefined ? formData[field.name] : '';
+
     const baseClasses = cn(
       "w-full px-4 py-3 border rounded-xl transition-all duration-200",
       "focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary",
@@ -218,32 +202,28 @@ export default function NewProjectPage() {
     switch (field.type) {
       case 'textarea':
         return (
-          <div className="relative">
-            <textarea
-              value={formData[field.name] || ''}
-              onChange={(e) => handleFieldChange(field.name, e.target.value)}
-              onBlur={() => handleFieldBlur(field.name)}
-              className={cn(baseClasses, "min-h-[120px] resize-none")}
-              placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
-              required={field.required}
-            />
-          </div>
+          <textarea
+            value={value}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            onBlur={() => handleFieldBlur(field.name)}
+            className={cn(baseClasses, "min-h-[120px] resize-none")}
+            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+          />
         );
 
       case 'select':
         const options = field.name === 'type' && projectTypeOptions.length > 0
           ? projectTypeOptions
-          : (field.options || []).map((opt: string) => ({ value: opt, label: opt }));
+          : (field.options || []).map((opt: string) => ({ value: opt, label: opt.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) }));
 
         return (
           <div className="relative">
-            {icon && <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10">{icon}</div>}
+            {icon && <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none">{icon}</div>}
             <select
-              value={formData[field.name] || ''}
+              value={value}
               onChange={(e) => handleFieldChange(field.name, e.target.value)}
               onBlur={() => handleFieldBlur(field.name)}
-              className={cn(baseClasses, icon && "pl-11", "appearance-none cursor-pointer")}
-              required={field.required}
+              className={cn(baseClasses, icon && "pl-11", "appearance-none cursor-pointer bg-white")}
             >
               <option value="">Select {field.label}</option>
               {options.map((opt: any) => (
@@ -265,22 +245,21 @@ export default function NewProjectPage() {
         return (
           <div className="relative">
             {field.type === 'currency' && (
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">
-                {systemConfig.defaultCurrency === 'USD' ? '$' : systemConfig.defaultCurrency === 'EUR' ? '€' : '₹'}
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium pointer-events-none">
+                {systemConfig?.defaultCurrency === 'EUR' ? '€' : systemConfig?.defaultCurrency === 'INR' ? '₹' : '$'}
               </div>
             )}
             {field.type === 'number' && icon && (
-              <div className="absolute left-4 top-1/2 -translate-y-1/2">{icon}</div>
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">{icon}</div>
             )}
             <input
               type="number"
-              value={formData[field.name] || ''}
+              value={value}
               onChange={(e) => handleFieldChange(field.name, e.target.value)}
               onBlur={() => handleFieldBlur(field.name)}
               className={cn(baseClasses, (field.type === 'currency' || icon) && "pl-11")}
               placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
               step={field.type === 'currency' ? '0.01' : '0.1'}
-              required={field.required}
             />
           </div>
         );
@@ -288,14 +267,13 @@ export default function NewProjectPage() {
       case 'date':
         return (
           <div className="relative">
-            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             <input
               type="date"
-              value={formData[field.name] || ''}
+              value={value}
               onChange={(e) => handleFieldChange(field.name, e.target.value)}
               onBlur={() => handleFieldBlur(field.name)}
               className={cn(baseClasses, "pl-11")}
-              required={field.required}
             />
           </div>
         );
@@ -305,7 +283,7 @@ export default function NewProjectPage() {
           <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
             <input
               type="checkbox"
-              checked={formData[field.name] || false}
+              checked={Boolean(value)}
               onChange={(e) => handleFieldChange(field.name, e.target.checked)}
               className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"
             />
@@ -316,17 +294,16 @@ export default function NewProjectPage() {
       case 'email':
         return (
           <div className="relative">
-            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
             </svg>
             <input
               type="email"
-              value={formData[field.name] || ''}
+              value={value}
               onChange={(e) => handleFieldChange(field.name, e.target.value)}
               onBlur={() => handleFieldBlur(field.name)}
               className={cn(baseClasses, "pl-11")}
               placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
-              required={field.required}
             />
           </div>
         );
@@ -334,15 +311,14 @@ export default function NewProjectPage() {
       default: // text
         return (
           <div className="relative">
-            {icon && <div className="absolute left-4 top-1/2 -translate-y-1/2">{icon}</div>}
+            {icon && <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">{icon}</div>}
             <input
               type="text"
-              value={formData[field.name] || ''}
+              value={value}
               onChange={(e) => handleFieldChange(field.name, e.target.value)}
               onBlur={() => handleFieldBlur(field.name)}
               className={cn(baseClasses, icon && "pl-11")}
               placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
-              required={field.required}
             />
           </div>
         );
@@ -350,9 +326,15 @@ export default function NewProjectPage() {
   };
 
   // Calculate progress
-  const filledFields = visibleFields.filter(f => formData[f.name]).length;
+  const filledFields = visibleFields.filter(f => {
+    const val = formData[f.name];
+    return val !== '' && val !== undefined && val !== null;
+  }).length;
   const requiredFields = visibleFields.filter(f => f.required);
-  const filledRequired = requiredFields.filter(f => formData[f.name]).length;
+  const filledRequired = requiredFields.filter(f => {
+    const val = formData[f.name];
+    return val !== '' && val !== undefined && val !== null;
+  }).length;
   const progress = visibleFields.length > 0 ? Math.round((filledFields / visibleFields.length) * 100) : 0;
 
   if (configLoading) {
@@ -360,7 +342,7 @@ export default function NewProjectPage() {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-gray-500">Loading form configuration...</p>
+          <p className="text-gray-500">Loading form...</p>
         </div>
       </div>
     );
@@ -439,103 +421,32 @@ export default function NewProjectPage() {
                   </div>
                 </div>
                 <CardContent className="p-6">
-                  <div className="grid gap-6">
-                    {/* Render fields - try to pair them in grid */}
-                    {(() => {
-                      const rows: JSX.Element[] = [];
-                      let i = 0;
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {fields.map((field) => {
+                      // Full width for textarea and checkbox
+                      const isFullWidth = field.type === 'textarea' || field.type === 'checkbox';
 
-                      while (i < fields.length) {
-                        const field = fields[i];
-                        const nextField = fields[i + 1];
-
-                        // Check if this field should be full width
-                        const isFullWidth = field.type === 'textarea' || field.type === 'checkbox';
-
-                        // Check if current and next field should be grouped
-                        const shouldGroup = nextField &&
-                          !isFullWidth &&
-                          nextField.type !== 'textarea' as any &&
-                          nextField.type !== 'checkbox' as any &&
-                          (shouldGroupFields(field.name, nextField.name) ||
-                           (field.type !== 'textarea' as any && nextField.type !== 'textarea' as any));
-
-                        if (isFullWidth) {
-                          rows.push(
-                            <div key={field.id} className="col-span-2">
-                              {field.type !== 'checkbox' && (
-                                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                                  {field.label}
-                                  {field.required && <span className="text-red-500">*</span>}
-                                  {field.helpText && (
-                                    <span className="text-xs text-gray-400 font-normal">({field.helpText})</span>
-                                  )}
-                                </label>
-                              )}
-                              {renderField(field)}
-                              {touched[field.name] && errors[field.name] && (
-                                <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
-                                  <AlertCircle className="w-3 h-3" />
-                                  {errors[field.name]}
-                                </p>
-                              )}
-                            </div>
-                          );
-                          i++;
-                        } else if (shouldGroup && nextField) {
-                          rows.push(
-                            <div key={`${field.id}-${nextField.id}`} className="grid grid-cols-2 gap-4 col-span-2">
-                              <div>
-                                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                                  {field.label}
-                                  {field.required && <span className="text-red-500">*</span>}
-                                </label>
-                                {renderField(field)}
-                                {touched[field.name] && errors[field.name] && (
-                                  <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
-                                    <AlertCircle className="w-3 h-3" />
-                                    {errors[field.name]}
-                                  </p>
-                                )}
-                              </div>
-                              <div>
-                                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                                  {nextField.label}
-                                  {nextField.required && <span className="text-red-500">*</span>}
-                                </label>
-                                {renderField(nextField)}
-                                {touched[nextField.name] && errors[nextField.name] && (
-                                  <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
-                                    <AlertCircle className="w-3 h-3" />
-                                    {errors[nextField.name]}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          );
-                          i += 2;
-                        } else {
-                          rows.push(
-                            <div key={field.id} className="col-span-2 sm:col-span-1">
-                              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                                {field.label}
-                                {field.required && <span className="text-red-500">*</span>}
-                              </label>
-                              {renderField(field)}
-                              {touched[field.name] && errors[field.name] && (
-                                <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
-                                  <AlertCircle className="w-3 h-3" />
-                                  {errors[field.name]}
-                                </p>
-                              )}
-                            </div>
-                          );
-                          i++;
-                        }
-                      }
-
-                      return rows;
-                    })()}
+                      return (
+                        <div key={field.id} className={isFullWidth ? 'md:col-span-2' : ''}>
+                          {field.type !== 'checkbox' && (
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                              {field.label}
+                              {field.required && <span className="text-red-500">*</span>}
+                            </label>
+                          )}
+                          {renderField(field)}
+                          {touched[field.name] && errors[field.name] && (
+                            <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              {errors[field.name]}
+                            </p>
+                          )}
+                          {field.helpText && field.type !== 'checkbox' && (
+                            <p className="text-xs text-gray-400 mt-1">{field.helpText}</p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
