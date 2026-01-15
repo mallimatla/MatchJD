@@ -1080,105 +1080,250 @@ export default function AdminPage() {
                 {/* Document Display Section */}
                 {activeSection === 'documents' && (
                   <div className="space-y-6">
-                    {documentDisplayConfigs.map((config) => (
+                    {/* Add New Category Button */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">
+                          Configure what fields to extract and display for each document type.
+                          Changes are automatically applied to the user app.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          const newCategory: DocumentDisplayConfig = {
+                            category: `category_${Date.now()}`,
+                            label: 'New Document Type',
+                            fields: [],
+                          };
+                          setDocumentDisplayConfigs([...documentDisplayConfigs, newCategory]);
+                          // Auto-expand the new category
+                          setExpandedItems(new Set([...Array.from(expandedItems), newCategory.category]));
+                        }}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Document Type
+                      </Button>
+                    </div>
+
+                    {documentDisplayConfigs.length === 0 && (
+                      <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed">
+                        <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                        <p className="text-gray-500">No document types configured</p>
+                        <p className="text-sm text-gray-400 mt-1">Click &quot;Add Document Type&quot; to get started</p>
+                      </div>
+                    )}
+
+                    {documentDisplayConfigs.map((config, configIndex) => (
                       <div key={config.category} className="border rounded-lg">
-                        <button
-                          onClick={() => toggleExpand(config.category)}
-                          className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
-                        >
-                          <div>
-                            <h3 className="font-medium">{config.label}</h3>
-                            <p className="text-sm text-gray-500">Category: {config.category}</p>
+                        <div className="flex items-center justify-between p-4 hover:bg-gray-50">
+                          <button
+                            onClick={() => toggleExpand(config.category)}
+                            className="flex-1 flex items-center gap-3 text-left"
+                          >
+                            <FileText className="w-5 h-5 text-gray-400" />
+                            <div>
+                              <h3 className="font-medium">{config.label}</h3>
+                              <p className="text-sm text-gray-500 font-mono">category: {config.category}</p>
+                            </div>
+                          </button>
+                          <div className="flex items-center gap-3">
+                            <Badge>{config.fields.length} field{config.fields.length !== 1 ? 's' : ''}</Badge>
+                            <Badge variant="outline">{config.fields.filter(f => f.visible).length} visible</Badge>
+                            <button
+                              onClick={() => {
+                                if (confirm(`Delete "${config.label}" document type? This will remove all its fields.`)) {
+                                  setDocumentDisplayConfigs(documentDisplayConfigs.filter((_, i) => i !== configIndex));
+                                }
+                              }}
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded"
+                              title="Delete document type"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => toggleExpand(config.category)}>
+                              {expandedItems.has(config.category) ? (
+                                <ChevronDown className="w-5 h-5 text-gray-500" />
+                              ) : (
+                                <ChevronRight className="w-5 h-5 text-gray-500" />
+                              )}
+                            </button>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge>{config.fields.filter(f => f.visible).length} visible</Badge>
-                            {expandedItems.has(config.category) ? (
-                              <ChevronDown className="w-5 h-5" />
-                            ) : (
-                              <ChevronRight className="w-5 h-5" />
-                            )}
-                          </div>
-                        </button>
+                        </div>
 
                         {expandedItems.has(config.category) && (
-                          <div className="border-t p-4 space-y-3">
+                          <div className="border-t p-4 space-y-4">
+                            {/* Category Settings */}
+                            <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Display Name
+                                </label>
+                                <input
+                                  type="text"
+                                  value={config.label}
+                                  onChange={(e) => {
+                                    const newConfigs = [...documentDisplayConfigs];
+                                    newConfigs[configIndex].label = e.target.value;
+                                    setDocumentDisplayConfigs(newConfigs);
+                                  }}
+                                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                                  placeholder="e.g., Land Lease Agreement"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Category ID <span className="text-gray-400">(used in code)</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={config.category}
+                                  onChange={(e) => {
+                                    const newConfigs = [...documentDisplayConfigs];
+                                    const oldCategory = newConfigs[configIndex].category;
+                                    newConfigs[configIndex].category = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+                                    setDocumentDisplayConfigs(newConfigs);
+                                    // Update expanded items if category changed
+                                    if (expandedItems.has(oldCategory)) {
+                                      const newExpanded = new Set(expandedItems);
+                                      newExpanded.delete(oldCategory);
+                                      newExpanded.add(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'));
+                                      setExpandedItems(newExpanded);
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 border rounded-lg text-sm font-mono"
+                                  placeholder="e.g., lease"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Fields Header */}
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-medium text-gray-700">Extraction Fields</h4>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const newConfigs = [...documentDisplayConfigs];
+                                  newConfigs[configIndex].fields.push({
+                                    path: `field_${Date.now()}`,
+                                    label: 'New Field',
+                                    type: 'text',
+                                    visible: true,
+                                    order: config.fields.length + 1,
+                                  });
+                                  setDocumentDisplayConfigs(newConfigs);
+                                }}
+                              >
+                                <Plus className="w-4 h-4 mr-1" />
+                                Add Field
+                              </Button>
+                            </div>
+
+                            {config.fields.length === 0 && (
+                              <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed">
+                                <p className="text-gray-500 text-sm">No fields configured</p>
+                                <p className="text-xs text-gray-400 mt-1">Add fields to define what data to extract from this document type</p>
+                              </div>
+                            )}
+
+                            {/* Fields List */}
                             {config.fields
                               .sort((a, b) => a.order - b.order)
-                              .map((field, index) => (
+                              .map((field, fieldIndex) => (
                                 <div
-                                  key={field.path}
-                                  className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg"
+                                  key={`${config.category}-${fieldIndex}`}
+                                  className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg"
                                 >
-                                  <GripVertical className="w-4 h-4 text-gray-400 cursor-move" />
+                                  <GripVertical className="w-4 h-4 text-gray-400 cursor-move mt-2" />
 
-                                  <div className="flex-1 grid grid-cols-4 gap-3">
-                                    <input
-                                      type="text"
-                                      value={field.label}
-                                      onChange={(e) => {
-                                        const newConfigs = [...documentDisplayConfigs];
-                                        const configIndex = newConfigs.findIndex(
-                                          (c) => c.category === config.category
-                                        );
-                                        newConfigs[configIndex].fields[index].label = e.target.value;
-                                        setDocumentDisplayConfigs(newConfigs);
-                                      }}
-                                      className="px-2 py-1 border rounded text-sm"
-                                      placeholder="Label"
-                                    />
-                                    <input
-                                      type="text"
-                                      value={field.path}
-                                      onChange={(e) => {
-                                        const newConfigs = [...documentDisplayConfigs];
-                                        const configIndex = newConfigs.findIndex(
-                                          (c) => c.category === config.category
-                                        );
-                                        newConfigs[configIndex].fields[index].path = e.target.value;
-                                        setDocumentDisplayConfigs(newConfigs);
-                                      }}
-                                      className="px-2 py-1 border rounded text-sm font-mono"
-                                      placeholder="data.path"
-                                    />
-                                    <select
-                                      value={field.type}
-                                      onChange={(e) => {
-                                        const newConfigs = [...documentDisplayConfigs];
-                                        const configIndex = newConfigs.findIndex(
-                                          (c) => c.category === config.category
-                                        );
-                                        newConfigs[configIndex].fields[index].type = e.target
-                                          .value as any;
-                                        setDocumentDisplayConfigs(newConfigs);
-                                      }}
-                                      className="px-2 py-1 border rounded text-sm"
-                                    >
-                                      <option value="text">Text</option>
-                                      <option value="number">Number</option>
-                                      <option value="currency">Currency</option>
-                                      <option value="date">Date</option>
-                                      <option value="percentage">Percentage</option>
-                                      <option value="list">List</option>
-                                    </select>
-                                    <label className="flex items-center gap-2">
-                                      <input
-                                        type="checkbox"
-                                        checked={field.visible}
-                                        onChange={(e) => {
-                                          const newConfigs = [...documentDisplayConfigs];
-                                          const configIndex = newConfigs.findIndex(
-                                            (c) => c.category === config.category
-                                          );
-                                          newConfigs[configIndex].fields[index].visible =
-                                            e.target.checked;
-                                          setDocumentDisplayConfigs(newConfigs);
-                                        }}
-                                      />
-                                      <span className="text-sm">Visible</span>
-                                    </label>
+                                  <div className="flex-1 space-y-2">
+                                    <div className="grid grid-cols-4 gap-3">
+                                      <div>
+                                        <label className="block text-xs text-gray-500 mb-1">Label</label>
+                                        <input
+                                          type="text"
+                                          value={field.label}
+                                          onChange={(e) => {
+                                            const newConfigs = [...documentDisplayConfigs];
+                                            newConfigs[configIndex].fields[fieldIndex].label = e.target.value;
+                                            setDocumentDisplayConfigs(newConfigs);
+                                          }}
+                                          className="w-full px-2 py-1.5 border rounded text-sm"
+                                          placeholder="Display label"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs text-gray-500 mb-1">
+                                          JSON Path <span className="text-gray-400">(dot notation)</span>
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={field.path}
+                                          onChange={(e) => {
+                                            const newConfigs = [...documentDisplayConfigs];
+                                            newConfigs[configIndex].fields[fieldIndex].path = e.target.value;
+                                            setDocumentDisplayConfigs(newConfigs);
+                                          }}
+                                          className="w-full px-2 py-1.5 border rounded text-sm font-mono"
+                                          placeholder="e.g., lessor.name"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs text-gray-500 mb-1">Display Type</label>
+                                        <select
+                                          value={field.type}
+                                          onChange={(e) => {
+                                            const newConfigs = [...documentDisplayConfigs];
+                                            newConfigs[configIndex].fields[fieldIndex].type = e.target.value as any;
+                                            setDocumentDisplayConfigs(newConfigs);
+                                          }}
+                                          className="w-full px-2 py-1.5 border rounded text-sm"
+                                        >
+                                          <option value="text">Text</option>
+                                          <option value="number">Number</option>
+                                          <option value="currency">Currency ($)</option>
+                                          <option value="date">Date</option>
+                                          <option value="percentage">Percentage (%)</option>
+                                          <option value="list">List / Array</option>
+                                        </select>
+                                      </div>
+                                      <div className="flex items-end gap-3">
+                                        <label className="flex items-center gap-2 pb-1.5">
+                                          <input
+                                            type="checkbox"
+                                            checked={field.visible}
+                                            onChange={(e) => {
+                                              const newConfigs = [...documentDisplayConfigs];
+                                              newConfigs[configIndex].fields[fieldIndex].visible = e.target.checked;
+                                              setDocumentDisplayConfigs(newConfigs);
+                                            }}
+                                          />
+                                          <span className="text-sm">Visible</span>
+                                        </label>
+                                        <button
+                                          onClick={() => {
+                                            const newConfigs = [...documentDisplayConfigs];
+                                            newConfigs[configIndex].fields = newConfigs[configIndex].fields.filter((_, i) => i !== fieldIndex);
+                                            setDocumentDisplayConfigs(newConfigs);
+                                          }}
+                                          className="p-1.5 text-red-500 hover:bg-red-50 rounded"
+                                          title="Delete field"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               ))}
+
+                            {/* Help Text */}
+                            {config.fields.length > 0 && (
+                              <div className="text-xs text-gray-500 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                                <strong>Tip:</strong> Use dot notation for nested paths (e.g., <code className="bg-yellow-100 px-1 rounded">rent.baseRentPerAcre</code>).
+                                The AI will extract these fields from uploaded documents of this type.
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
