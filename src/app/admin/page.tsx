@@ -849,81 +849,139 @@ export default function AdminPage() {
                             {form.fields
                               .sort((a, b) => a.order - b.order)
                               .map((field) => (
-                                <div
-                                  key={field.id}
-                                  className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg"
-                                >
-                                  <GripVertical className="w-4 h-4 text-gray-400 cursor-move" />
+                                <div key={field.id} className="space-y-2">
+                                  <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                                    <GripVertical className="w-4 h-4 text-gray-400 cursor-move" />
 
-                                  <div className="flex-1 grid grid-cols-5 gap-3">
-                                    <input
-                                      type="text"
-                                      value={field.label}
-                                      onChange={(e) =>
-                                        updateFormField(form.id, field.id, { label: e.target.value })
-                                      }
-                                      className="px-2 py-1 border rounded text-sm"
-                                      placeholder="Label"
-                                    />
-                                    <input
-                                      type="text"
-                                      value={field.name}
-                                      onChange={(e) =>
-                                        updateFormField(form.id, field.id, { name: e.target.value })
-                                      }
-                                      className="px-2 py-1 border rounded text-sm font-mono"
-                                      placeholder="field_name"
-                                    />
-                                    <select
-                                      value={field.type}
-                                      onChange={(e) =>
-                                        updateFormField(form.id, field.id, {
-                                          type: e.target.value as FieldConfig['type'],
-                                        })
-                                      }
-                                      className="px-2 py-1 border rounded text-sm"
+                                    <div className="flex-1 grid grid-cols-5 gap-3">
+                                      <input
+                                        type="text"
+                                        value={field.label}
+                                        onChange={(e) =>
+                                          updateFormField(form.id, field.id, { label: e.target.value })
+                                        }
+                                        className="px-2 py-1 border rounded text-sm"
+                                        placeholder="Label"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={field.name}
+                                        onChange={(e) =>
+                                          updateFormField(form.id, field.id, { name: e.target.value })
+                                        }
+                                        className="px-2 py-1 border rounded text-sm font-mono"
+                                        placeholder="field_name"
+                                      />
+                                      <select
+                                        value={field.type}
+                                        onChange={(e) =>
+                                          updateFormField(form.id, field.id, {
+                                            type: e.target.value as FieldConfig['type'],
+                                          })
+                                        }
+                                        className="px-2 py-1 border rounded text-sm"
+                                      >
+                                        <option value="text">Text</option>
+                                        <option value="number">Number</option>
+                                        <option value="currency">Currency</option>
+                                        <option value="date">Date</option>
+                                        <option value="select">Dropdown</option>
+                                        <option value="textarea">Textarea</option>
+                                        <option value="checkbox">Checkbox</option>
+                                        <option value="email">Email</option>
+                                      </select>
+                                      <label className="flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={field.required}
+                                          onChange={(e) =>
+                                            updateFormField(form.id, field.id, {
+                                              required: e.target.checked,
+                                            })
+                                          }
+                                        />
+                                        <span className="text-sm">Required</span>
+                                      </label>
+                                      <label className="flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={field.visible}
+                                          onChange={(e) =>
+                                            updateFormField(form.id, field.id, {
+                                              visible: e.target.checked,
+                                            })
+                                          }
+                                        />
+                                        <span className="text-sm">Visible</span>
+                                      </label>
+                                    </div>
+
+                                    <button
+                                      onClick={() => deleteFormField(form.id, field.id)}
+                                      className="p-1 text-red-500 hover:bg-red-50 rounded"
                                     >
-                                      <option value="text">Text</option>
-                                      <option value="number">Number</option>
-                                      <option value="currency">Currency</option>
-                                      <option value="date">Date</option>
-                                      <option value="select">Dropdown</option>
-                                      <option value="textarea">Textarea</option>
-                                      <option value="checkbox">Checkbox</option>
-                                      <option value="email">Email</option>
-                                    </select>
-                                    <label className="flex items-center gap-2">
-                                      <input
-                                        type="checkbox"
-                                        checked={field.required}
-                                        onChange={(e) =>
-                                          updateFormField(form.id, field.id, {
-                                            required: e.target.checked,
-                                          })
-                                        }
-                                      />
-                                      <span className="text-sm">Required</span>
-                                    </label>
-                                    <label className="flex items-center gap-2">
-                                      <input
-                                        type="checkbox"
-                                        checked={field.visible}
-                                        onChange={(e) =>
-                                          updateFormField(form.id, field.id, {
-                                            visible: e.target.checked,
-                                          })
-                                        }
-                                      />
-                                      <span className="text-sm">Visible</span>
-                                    </label>
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
                                   </div>
 
-                                  <button
-                                    onClick={() => deleteFormField(form.id, field.id)}
-                                    className="p-1 text-red-500 hover:bg-red-50 rounded"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
+                                  {/* Dropdown Options Editor */}
+                                  {field.type === 'select' && (
+                                    <div className="ml-8 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm font-medium text-blue-800">
+                                          Dropdown Options
+                                        </span>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            const currentOptions = field.options || [];
+                                            updateFormField(form.id, field.id, {
+                                              options: [...currentOptions, `option_${currentOptions.length + 1}`],
+                                            });
+                                          }}
+                                          className="h-7 text-xs"
+                                        >
+                                          <Plus className="w-3 h-3 mr-1" />
+                                          Add Option
+                                        </Button>
+                                      </div>
+                                      {(!field.options || field.options.length === 0) ? (
+                                        <p className="text-sm text-blue-600">
+                                          No options defined. Click &quot;Add Option&quot; to add dropdown choices.
+                                        </p>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          {field.options.map((option, optIndex) => (
+                                            <div key={optIndex} className="flex items-center gap-2">
+                                              <input
+                                                type="text"
+                                                value={option}
+                                                onChange={(e) => {
+                                                  const newOptions = [...(field.options || [])];
+                                                  newOptions[optIndex] = e.target.value;
+                                                  updateFormField(form.id, field.id, { options: newOptions });
+                                                }}
+                                                className="flex-1 px-2 py-1 border rounded text-sm"
+                                                placeholder="Option value"
+                                              />
+                                              <button
+                                                onClick={() => {
+                                                  const newOptions = (field.options || []).filter(
+                                                    (_, i) => i !== optIndex
+                                                  );
+                                                  updateFormField(form.id, field.id, { options: newOptions });
+                                                }}
+                                                className="p-1 text-red-500 hover:bg-red-100 rounded"
+                                              >
+                                                <X className="w-4 h-4" />
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
 
