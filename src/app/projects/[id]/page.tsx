@@ -342,7 +342,11 @@ export default function ProjectDetailPage() {
         )}
 
         {activeTab === 'workflows' && (
-          <WorkflowStatus projectId={projectId} />
+          <WorkflowStatus
+            projectId={projectId}
+            parcelsCount={parcels.length}
+            documentsCount={documents.length}
+          />
         )}
 
         {activeTab === 'analysis' && (
