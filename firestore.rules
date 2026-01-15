@@ -61,5 +61,20 @@ service cloud.firestore {
       allow create: if false;
       allow update: if false;
     }
+
+    // Config collection - admin settings
+    // Authenticated users can read, only admins can write
+    match /config/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // DD Workstreams collection - tenant isolated
+    match /ddWorkstreams/{workstreamId} {
+      allow read: if isOwner(resource.data.tenantId);
+      allow create: if isAuthenticated() && hasValidTenantId();
+      allow update: if isOwner(resource.data.tenantId);
+      allow delete: if isOwner(resource.data.tenantId);
+    }
   }
 }
